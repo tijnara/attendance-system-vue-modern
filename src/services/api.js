@@ -733,7 +733,7 @@ export async function getUserById(id, opts = {}) {
     return null
 }
 
-// Find user by RFID or Barcode
+// Resolve department for user
 export async function resolveDepartmentForUser(userId) {
     try {
         const norm = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
@@ -774,27 +774,46 @@ export async function findUserByRfidOrBarcode(value) {
     if (!value) return null
 
     // helper to normalize backend response
-    const normalize = (res) => {
+    const normalizeFirst = (res) => {
         if (!res) return null
         if (Array.isArray(res) && res.length) return res[0]
         if (res?.content?.length) return res.content[0]
         return null
     }
 
+    // 1) Try new camelCase rfId param first
     try {
-        const byRfid = await http(`/api/users?rfid=${encodeURIComponent(value)}`)
-        const u = normalize(byRfid)
+        const byRfId = await http(`/api/users?rfId=${encodeURIComponent(value)}`)
+        const u = normalizeFirst(byRfId)
         if (u) return u
     } catch (e) {
-        console.warn('[API] RFID search failed:', e.message)
+        console.warn('[API] rfId search failed:', e.message)
     }
 
+    // 2) Fallback to legacy lowercase rfid
     try {
-        const byBarcode = await http(`/api/users?barcode=${encodeURIComponent(value)}`)
-        const u = normalize(byBarcode)
+        const byRfid = await http(`/api/users?rfid=${encodeURIComponent(value)}`)
+        const u = normalizeFirst(byRfid)
         if (u) return u
     } catch (e) {
-        console.warn('[API] Barcode search failed:', e.message)
+        console.warn('[API] rfid search failed:', e.message)
+    }
+
+
+    // 4) Last resort: fetch all users and match locally (supports new rfId field)
+    try {
+        const res = await getUsers()
+        const list = Array.isArray(res) ? res : (res?.content || [])
+        if (Array.isArray(list) && list.length) {
+            const v = String(value).trim()
+            const match = list.find(u => {
+                const rfId = u?.rfId ?? u?.rfid ?? u?.RFID
+                return String(rfId || '').trim() === v
+            })
+            if (match) return match
+        }
+    } catch (e) {
+        console.warn('[API] fallback list search failed:', e?.message || e)
     }
 
     return null

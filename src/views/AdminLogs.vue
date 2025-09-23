@@ -4,9 +4,9 @@
     <div
         class="rounded-2xl p-6 border border-black/5 dark:border-white/10 bg-white/70 dark:bg-neutral-900/70 backdrop-blur shadow-sm"
     >
-      <div class="flex items-center justify-between gap-4 mb-4">
+      <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
         <h2 class="text-lg font-semibold">Admin Logs</h2>
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-3">
           <label class="flex items-center gap-2 text-sm opacity-80">
             <input type="checkbox" v-model="autoRefresh" />
             Auto-refresh (15s)
@@ -69,7 +69,7 @@
 
       <!-- Table -->
       <div v-else class="overflow-auto">
-        <table class="min-w-full text-sm">
+        <table class="min-w-[900px] w-full text-sm">
           <thead class="text-left border-y border-black/10 dark:border-white/10 bg-black/[.03] dark:bg-white/[.03]">
           <tr class="[&>*]:py-2 [&>*]:px-4">
             <th>Log ID</th>
@@ -95,12 +95,12 @@
             <td class="py-2 px-4">#{{ row.userId }}</td>
             <td class="py-2 px-4">{{ userDept(row.userId) }}</td>
             <td class="py-2 px-4">{{ row.logDate }}</td>
-            <td class="py-2 px-4">{{ row.timeIn || '-' }}</td>
-            <td class="py-2 px-4">{{ row.timeOut || '-' }}</td>
-            <td class="py-2 px-4">{{ row.lunchStart || '-' }}</td>
-            <td class="py-2 px-4">{{ row.lunchEnd || '-' }}</td>
-            <td class="py-2 px-4">{{ row.breakStart || '-' }}</td>
-            <td class="py-2 px-4">{{ row.breakEnd || '-' }}</td>
+            <td class="py-2 px-4">{{ showTime(row.timeIn) }}</td>
+            <td class="py-2 px-4">{{ showTime(row.timeOut) }}</td>
+            <td class="py-2 px-4">{{ showTime(row.lunchStart) }}</td>
+            <td class="py-2 px-4">{{ showTime(row.lunchEnd) }}</td>
+            <td class="py-2 px-4">{{ showTime(row.breakStart) }}</td>
+            <td class="py-2 px-4">{{ showTime(row.breakEnd) }}</td>
             <td class="py-2 px-4">{{ computedStatus(row) }}</td>
           </tr>
           </tbody>
@@ -108,7 +108,7 @@
       </div>
 
       <!-- Pagination -->
-      <div class="px-6 py-4 flex items-center justify-between border-t border-black/10 dark:border-white/10">
+      <div class="px-6 py-4 flex flex-wrap items-center justify-between gap-3 border-t border-black/10 dark:border-white/10">
         <div class="text-xs opacity-70">
           Page {{ page + 1 }} of {{ totalPages || 1 }}
         </div>
@@ -144,6 +144,23 @@ function toHms(s){
   const mm = String(m[2]).padStart(2,'0')
   const ss = m[3] != null ? String(m[3]).padStart(2,'0') : '00'
   return `${hh}:${mm}:${ss}`
+}
+function toHms12(s){
+  if (!s && s !== 0) return ''
+  const m = String(s).match(/(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/)
+  if (!m) return ''
+  let hh = Number(m[1])
+  const mm = String(m[2]).padStart(2,'0')
+  const ss = m[3] != null ? String(m[3]).padStart(2,'0') : '00'
+  const ap = hh >= 12 ? 'PM' : 'AM'
+  hh = hh % 12
+  if (hh === 0) hh = 12
+  const sec = m[3] != null ? `:${ss}` : ''
+  return `${hh}:${mm}${sec} ${ap}`
+}
+function showTime(v){
+  const t = toHms12(v)
+  return t || (v ? String(v) : '-')
 }
 function prettyStatus(s){
   const t = String(s || '').trim()
