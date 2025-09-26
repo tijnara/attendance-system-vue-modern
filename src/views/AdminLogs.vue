@@ -93,7 +93,7 @@
           >
             <td class="py-2 px-4">{{ row.logId ?? row.id }}</td>
             <td class="py-2 px-4">#{{ row.userId }}</td>
-            <td class="py-2 px-4">{{ userDept(row.userId) }}</td>
+            <td class="py-2 px-4">{{ displayDept(row) }}</td>
             <td class="py-2 px-4">{{ row.logDate }}</td>
             <td class="py-2 px-4">{{ showTime(row.timeIn) }}</td>
             <td class="py-2 px-4">{{ showTime(row.timeOut) }}</td>
@@ -132,6 +132,9 @@ const q = reactive({ userId: '', from: '', to: '' })
 
 // user -> department mapping
 const userDeptMap = ref({})
+
+// departmentId -> departmentName mapping
+const deptNameById = ref({})
 
 // department work-start map (by department name, case-insensitive)
 const deptWorkStartByKey = ref({})
@@ -189,13 +192,17 @@ async function loadDeptMeta(){
       depRes = []
     }
     const idToNameKey = {}
+    const idToName = {}
     for (const d of depRes) {
       if (!d) continue
-      const id = d.departmentId ?? d.id
-      const name = d.departmentName ?? d.name
+      const id = d.departmentId ?? d.department_id ?? d.deptId ?? d.dept_id ?? d.id
+      const name = d.departmentName ?? d.department_name ?? d.deptName ?? d.dept_name ?? d.name ?? d.title
       if (id == null || !name) continue
       idToNameKey[String(id)] = nameKey(name)
+      idToName[String(id)] = String(name)
     }
+    // expose departmentId -> name mapping for UI
+    deptNameById.value = idToName
 
     // Load schedules
     let scheds = []
@@ -255,6 +262,19 @@ function pickDept(u) {
 }
 function userDept(userId) {
   return userDeptMap.value[String(userId ?? '')] || '-'
+}
+
+function deptName(id){
+  if (id == null) return ''
+  return deptNameById.value[String(id)] || ''
+}
+function displayDept(row){
+  const direct = row?.departmentName || row?.department?.departmentName || row?.department?.name || row?.department || row?.deptName || row?.dept_name
+  if (direct) return String(direct)
+  const viaId = row?.departmentId ?? row?.department_id ?? row?.department?.departmentId ?? row?.department?.id
+  const nm = deptName(viaId)
+  if (nm) return nm
+  return userDept(row?.userId)
 }
 
 // pagination
@@ -331,7 +351,7 @@ function computedStatus(row){
   try {
     const ti = toHms(row?.timeIn)
     if (!ti) return prettyStatus(row?.status) || '-'
-    const dept = userDept(row?.userId)
+    const dept = displayDept(row)
     const ws = deptWorkStartByKey.value[nameKey(dept)]
     if (!ws) return prettyStatus(row?.status) || '-'
     return ti > ws ? 'Late' : 'On Time'
@@ -349,7 +369,7 @@ function exportCsv() {
     ...rows.value.map(r => [
       safe(r.logId ?? r.id),
       safe(r.userId),
-      safe(userDept(r.userId)),
+      safe(displayDept(r)),
       safe(r.logDate),
       safe(r.timeIn || ''),
       safe(r.timeOut || ''),

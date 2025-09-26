@@ -17,18 +17,18 @@
       </div>
     </div>
 
-
-    <!-- Top row: Employee Information and Scan Fingerprint side by side -->
+    <!-- Top row: Employee Information and Department Schedule -->
     <div class="grid lg:grid-cols-5 gap-4">
       <!-- Employee Information card -->
       <div class="rounded-2xl p-4 border border-black/5 bg-white/70 backdrop-blur shadow-sm lg:col-span-2">
         <div class="flex items-center gap-3 mb-3">
           <div class="w-9 h-9 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center">
-            <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' class="w-5 h-5"><path fill="currentColor" d="M12 12a5 5 0 1 0-5-5a5 5 0 0 0 5 5m-7 8a7 7 0 0 1 14 0z"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5"><path fill="currentColor" d="M12 12a5 5 0 1 0-5-5a5 5 0 0 0 5 5m-7 8a7 7 0 0 1 14 0z"/></svg>
           </div>
           <h3 class="text-lg font-semibold">Employee Information</h3>
         </div>
-        <!-- Photo placeholder / preview (no upload) -->
+
+        <!-- Photo -->
         <div class="mb-4 flex items-center gap-4">
           <div class="w-32 h-32 rounded-full bg-neutral-200 overflow-hidden flex items-center justify-center text-neutral-600 border border-black/10">
             <img v-if="displayPhoto" :src="displayPhoto" alt="Employee photo" class="w-full h-full object-cover" />
@@ -39,26 +39,42 @@
             <div class="text-xs text-neutral-600">Photo will appear here when available from the database.</div>
           </div>
         </div>
+
         <div class="grid md:grid-cols-2 gap-3">
           <div>
             <label class="block text-sm mb-1 opacity-80">Employee No:</label>
-            <input class="w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400" type="number" v-model.number="form.manualUserId" placeholder="Employee number" :disabled="DISABLE_EMPLOYEE_NO" />
+            <input
+                class="w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400"
+                type="number"
+                v-model.number="form.manualUserId"
+                placeholder="Employee number"
+                :disabled="DISABLE_EMPLOYEE_NO || busy"
+            />
           </div>
+
           <div>
             <label class="block text-sm mb-1 opacity-80 flex items-center gap-2">
               <span class="inline-flex items-center justify-center w-5 h-5 text-indigo-600">
-                <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' class="w-5 h-5"><path fill="currentColor" d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2M4 6h16v3H4zm3.5 9A1.5 1.5 0 1 1 9 13.5A1.5 1.5 0 0 1 7.5 15m8.5 2h-7a1 1 0 0 1 0-2h7a1 1 0 1 1 0 2"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5"><path fill="currentColor" d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2M4 6h16v3H4zm3.5 9A1.5 1.5 0 1 1 9 13.5A1.5 1.5 0 0 1 7.5 15m8.5 2h-7a1 1 0 0 1 0-2h7a1 1 0 1 1 0 2"/></svg>
               </span>
               <span>RFID</span>
             </label>
             <div class="relative">
               <span class="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">
-                <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' class="w-5 h-5"><path fill="currentColor" d="M2 7a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1h1a4 4 0 0 1 4 4v3a3 3 0 0 1-3 3H9a4 4 0 0 1-4-4V7Zm2 0v4a2 2 0 0 0 2 2h7V7z"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5"><path fill="currentColor" d="M2 7a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1h1a4 4 0 0 1 4 4v3a3 3 0 0 1-3 3H9a4 4 0 0 1-4-4V7Zm2 0v4a2 2 0 0 0 2 2h7V7z"/></svg>
               </span>
-              <input ref="rfidInput" class="w-full rounded-xl border border-black/10 bg-white/80 pl-10 pr-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400" type="text" v-model.trim="form.rfide" @keyup.enter="onRfidSubmit" placeholder="Tap card or enter RFID" :disabled="DISABLE_RFID" />
+              <input
+                  ref="rfidInput"
+                  class="w-full rounded-xl border border-black/10 bg-white/80 pl-10 pr-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400"
+                  type="text"
+                  v-model.trim="form.rfide"
+                  @keyup.enter="onRfidSubmit"
+                  placeholder="Tap card or enter RFID"
+                  :disabled="DISABLE_RFID || busy"
+                  autocomplete="off"
+              />
             </div>
           </div>
-
 
           <div class="md:col-span-2">
             <label class="block text-sm mb-1 opacity-80">Full Name:</label>
@@ -75,22 +91,30 @@
               {{ departmentNameDisplay }}
             </div>
           </div>
-          
         </div>
-        <div class="mt-4">
-          <button type="button" class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 text-white px-4 py-2 shadow hover:bg-indigo-700 disabled:opacity-60" :disabled="busy" @click="simulateFingerprint">
+
+        <div class="mt-4 flex items-center gap-2">
+          <button
+              type="button"
+              class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 text-white px-4 py-2 shadow hover:bg-indigo-700 disabled:opacity-60"
+              :disabled="busy"
+              @click="simulateFingerprint"
+          >
             <span class="flex items-center gap-1">
-              <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' class="w-4 h-4"><path fill="currentColor" d="M20 4H4a2 2 0 0 0-2 2v2h20V6a2 2 0 0 0-2-2M2 18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V10H2z"/></svg>
-              <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' class="w-4 h-4"><path fill="currentColor" d="M12 1a7 7 0 0 0-7 7v3a1 1 0 1 0 2 0V8a5 5 0 0 1 10 0v3a7 7 0 0 1-7 7a1 1 0 0 0 0 2a9 9 0 0 0 9-9V8a7 7 0 0 0-7-7"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4"><path fill="currentColor" d="M20 4H4a2 2 0 0 0-2 2v2h20V6a2 2 0 0 0-2-2M2 18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V10H2z"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4"><path fill="currentColor" d="M12 1a7 7 0 0 0-7 7v3a1 1 0 1 0 2 0V8a5 5 0 0 1 10 0v3a7 7 0 0 1-7 7a1 1 0 0 0 0 2a9 9 0 0 0 9-9V8a7 7 0 0 0-7-7"/></svg>
             </span>
-            <span>Scan</span>
+            <span v-if="!busy">Scan</span>
+            <span v-else>Saving…</span>
           </button>
         </div>
       </div>
 
-      <!-- Department Schedule (now side-by-side with Employee Info) -->
+      <!-- Department Schedule -->
       <div class="rounded-2xl p-0 border border-black/5 bg-white/70 backdrop-blur shadow-sm overflow-hidden lg:col-span-3">
-        <div class="px-6 py-4 border-b border-black/10"><h3 class="text-lg font-semibold">Department Schedule</h3></div>
+        <div class="px-6 py-4 border-b border-black/10">
+          <h3 class="text-lg font-semibold">Department Schedule</h3>
+        </div>
         <div class="p-4">
           <div v-if="schedulesLoading" class="text-sm text-neutral-600">Loading schedules...</div>
           <div v-else-if="schedulesError" class="text-sm text-red-600">Failed to load schedules: {{ schedulesError }}</div>
@@ -132,7 +156,6 @@
       </div>
     </div>
 
-
     <!-- Floating modal showing last scan info -->
     <div v-if="lastScan" class="fixed top-4 left-4 z-50">
       <div class="rounded-xl border border-black/10 bg-white/90 backdrop-blur px-4 py-3 shadow-lg">
@@ -148,7 +171,6 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
-import ScanCard from '../components/ScanCard.vue'
 import StatusToast from '../components/StatusToast.vue'
 import {
   postLog,
@@ -158,10 +180,13 @@ import {
   getUserById,
   normalizeStatus,
   getDepartmentSchedules,
-  getDepartments
+  getDepartments,
+  getExistingAttendanceLog,
+  updateLog
 } from '../services/api.js'
 import { DISABLE_EMPLOYEE_NO, DISABLE_RFID } from '../config.js'
 
+/** ---------------- Form / State ---------------- */
 const form = ref({
   action: 'TIME_IN',
   departmentId: undefined,
@@ -169,16 +194,13 @@ const form = ref({
   rfide: '',
   keyboard: ''
 })
-
-// Focus management
 const rfidInput = ref(null)
-
 const busy = ref(false)
 const lastLocalLogs = ref([])
 const toast = ref({ ok: false, msg: '' })
 const adminRows = ref([])
 
-// clock
+/** ---------------- Clock ---------------- */
 const now = ref(new Date())
 let t = null
 onMounted(() => { t = setInterval(() => now.value = new Date(), 1000) })
@@ -188,24 +210,24 @@ onBeforeUnmount(() => { if (t) clearInterval(t) })
 onMounted(() => {
   if (DISABLE_RFID) return
   nextTick(() => {
-    setTimeout(() => {
-      try { rfidInput?.value?.focus() } catch (_) {}
-    }, 0)
+    setTimeout(() => { try { rfidInput?.value?.focus() } catch {} }, 0)
   })
 })
 
-// PH time strings
-const timeString = computed(() => now.value.toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: '2-digit', minute:'2-digit', second:'2-digit', hour12: true }))
-const dateString = computed(() => now.value.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', weekday:'long', year:'numeric', month:'long', day:'numeric' }))
-const updatedOn = computed(() => now.value.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' }))
+/** ---------------- PH time strings ---------------- */
+const timeString = computed(() =>
+    now.value.toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: '2-digit', minute:'2-digit', second:'2-digit', hour12: true })
+)
+const dateString = computed(() =>
+    now.value.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', weekday:'long', year:'numeric', month:'long', day:'numeric' })
+)
+const updatedOn = computed(() =>
+    now.value.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' })
+)
 
-// dummy UI fields
+/** ---------------- Displayed user ---------------- */
 const fullName = ref('')
-
-// Last scan info (for floating modal)
 const lastScan = ref(null)
-
-// photo
 const selectedUser = ref(null)
 const serverPhotoUrl = computed(() => {
   const u = selectedUser.value
@@ -221,6 +243,7 @@ const initials = computed(() => {
   return s ? s.toUpperCase() : 'EMP'
 })
 
+/** ---------------- Watch manual user id ---------------- */
 watch(() => form.value.manualUserId, async (id) => {
   selectedUser.value = null
   if (id == null || id === '') { fullName.value = ''; form.value.departmentId = undefined; return }
@@ -238,59 +261,61 @@ watch(() => form.value.manualUserId, async (id) => {
           const info = await resolveDepartmentForUser(user.userId ?? user.id ?? id)
           if (info?.departmentId != null) form.value.departmentId = Number(info.departmentId)
         }
-      } catch (_) {}
+      } catch {}
     } else {
       fullName.value = ''
       form.value.departmentId = undefined
     }
-  } catch (_) { fullName.value = ''; form.value.departmentId = undefined }
+  } catch { fullName.value = ''; form.value.departmentId = undefined }
 })
 
-// RFID auto-populate handler
+/** ---------------- RFID submit ---------------- */
 async function onRfidSubmit() {
-  if (DISABLE_RFID) return
+  if (DISABLE_RFID || busy.value) return
   const v = String(form.value.rfide || '').trim()
   if (!v) return
   try {
     const u = await findUserByRfidOrBarcode(v)
     if (u && (u.userId != null || u.id != null)) {
-      // Set Employee No. (triggers watcher to auto-fill Full Name and Department)
       form.value.manualUserId = Number(u.userId ?? u.id)
-      // If user already carries department info, apply immediately for snappier UI
-      try {
-        const directId = u.departmentId ?? u.department_id ?? u?.department?.departmentId ?? u?.department?.id
-        if (directId != null) form.value.departmentId = Number(directId)
-      } catch (_) {}
-      // Optimistically show name/photo before watcher completes
+      const directId = u.departmentId ?? u.department_id ?? u?.department?.departmentId ?? u?.department?.id
+      if (directId != null) form.value.departmentId = Number(directId)
       selectedUser.value = u
       const name = u.fullName || u.name || [u.firstName, u.middleName, u.lastName].filter(Boolean).join(' ').trim()
       if (name) fullName.value = name
 
-      // Automatically log the user in after populating fields
+      // auto-commit
       try {
         await commit({ departmentId: form.value.departmentId, manualUserId: form.value.manualUserId })
-      } catch (_) {}
+      } finally {
+        // clear rfid field so the next tap doesn't append
+        form.value.rfide = ''
+      }
     } else {
       note(false, 'User not found for given RFID.')
-      // Clear fields shortly on error
       scheduleClearFields(2000)
     }
   } catch (e) {
     console.error('[Scanner] onRfidSubmit error:', e)
     note(false, 'Failed to resolve RFID.')
-    // Clear fields shortly on error
     scheduleClearFields(2000)
   }
 }
 
-// Manila timezone helpers
-const manilaDateYMD = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date())
+/** ---------------- Manila helpers ---------------- */
+const manilaDateYMD = () =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year:'numeric', month:'2-digit', day:'2-digit' })
+        .format(new Date())
+
 const manilaIsoWithOffset = () => {
-  const parts = new Intl.DateTimeFormat('en-PH', { timeZone:'Asia/Manila', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false }).formatToParts(new Date()).reduce((acc,p)=>{ acc[p.type]=p.value; return acc; }, {})
+  const parts = new Intl.DateTimeFormat('en-PH', {
+    timeZone:'Asia/Manila', year:'numeric', month:'2-digit', day:'2-digit',
+    hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false
+  }).formatToParts(new Date()).reduce((acc,p)=>{ acc[p.type]=p.value; return acc }, {})
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}+08:00`
 }
 
-// ---------- UI helpers ----------
+/** ---------------- UI helpers ---------------- */
 function note(ok, msg) {
   toast.value = { ok, msg }
   setTimeout(() => { toast.value = { ok: false, msg: '' } }, 3000)
@@ -301,23 +326,17 @@ function pushLocal(entry) {
 }
 function clearForm() {
   form.value = { action: 'TIME_IN', departmentId: undefined, manualUserId: undefined, rfide: '', keyboard: '' }
-  // Also reset displayed user info fields
   fullName.value = ''
   selectedUser.value = null
-  // Restore focus to RFID input for faster next scan
-  try { if (!DISABLE_RFID) nextTick(() => { setTimeout(() => { rfidInput?.value?.focus?.() }, 0) }) } catch (_) {}
+  try { if (!DISABLE_RFID) nextTick(() => setTimeout(() => rfidInput?.value?.focus?.(), 0)) } catch {}
 }
-// Delayed clear helper: clears all fields after a given delay.
-// If a new scan happens before the timeout, previous timer is cancelled.
 let clearFieldsTimer = null
 function scheduleClearFields(ms) {
-  try { if (clearFieldsTimer) { clearTimeout(clearFieldsTimer); clearFieldsTimer = null } } catch (_) {}
-  clearFieldsTimer = setTimeout(() => {
-    try { clearForm() } finally { clearFieldsTimer = null }
-  }, ms)
+  if (clearFieldsTimer) { clearTimeout(clearFieldsTimer); clearFieldsTimer = null }
+  clearFieldsTimer = setTimeout(() => { try { clearForm() } finally { clearFieldsTimer = null } }, ms)
 }
 
-// ---------- Data loaders ----------
+/** ---------------- Data loaders ---------------- */
 async function loadAdminLogs() {
   try {
     const data = await getLogs({})
@@ -330,35 +349,47 @@ async function loadAdminLogs() {
 }
 loadAdminLogs()
 
-// -------- Department Schedules --------
+/** ---------------- Department schedules ---------------- */
 const schedules = ref([])
 const schedulesLoading = ref(true)
 const schedulesError = ref('')
-
 const departments = ref([])
+
 const deptMap = computed(() => {
   const map = {}
   for (const d of departments.value || []) {
-    const key = String(d.departmentId ?? d.id)
+    const key = String(d.departmentId ?? d.department_id ?? d.deptId ?? d.dept_id ?? d.id)
     map[key] = d
   }
   return map
 })
+function deptNameOf(d) {
+  return d?.departmentName ?? d?.department_name ?? d?.deptName ?? d?.dept_name ?? d?.name ?? d?.title ?? null
+}
 function getDeptName(id) {
-  if (id == null) return 'Unknown'
+  if (id == null) return '—'
   const d = deptMap.value[String(id)]
-  return d?.departmentName || `Dept ${id}`
+  return deptNameOf(d) || '—'
 }
 const departmentNameDisplay = computed(() => {
-  const id = form.value.departmentId
-  if (id != null) {
-    const d = deptMap.value[String(id)]
-    return (d?.departmentName || d?.name || `Dept ${id}`)
+  const id = form.value.departmentId;
+  const u = selectedUser.value;
+
+  // Prioritize the name from the selected user object, as it may be nested.
+  const nameFromUserObject = u?.departmentName ?? u?.department_name ?? u?.deptName ?? u?.dept_name ?? u?.department?.departmentName ?? u?.department?.department_name ?? u?.department?.deptName ?? u?.department?.dept_name ?? u?.department?.name ?? u?.department?.title;
+  if (nameFromUserObject) {
+    return nameFromUserObject;
   }
-  const u = selectedUser.value
-  const nm = u?.departmentName ?? u?.department?.departmentName ?? u?.department?.name
-  return nm || '—'
+
+  // Fallback to looking up the ID in the general departments list.
+  if (id != null) {
+    const d = deptMap.value[String(id)];
+    return deptNameOf(d) || '—';
+  }
+
+  return '—'; // Default placeholder
 })
+
 async function loadSchedules() {
   schedulesLoading.value = true
   schedulesError.value = ''
@@ -379,13 +410,13 @@ async function loadDepartments() {
     const res = await getDepartments()
     const list = Array.isArray(res) ? res : (res?.content || [])
     departments.value = list
-  } catch (e) {
+  } catch {
     departments.value = []
   }
 }
 onMounted(() => { loadSchedules(); loadDepartments() })
 
-// ---------- Core helpers ----------
+/** ---------------- Utilities ---------------- */
 function titleCaseFromEnum(s = '') {
   return s.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase())
 }
@@ -405,8 +436,8 @@ function hms12(s){
 async function verifyUserExists(id) {
   try {
     const user = await getUserById(id, { noMock: true })
-    return !!(user && (user.userId != null || user.id != null))
-  } catch (_) {
+    return !!(user && (user.userId != null || user.id != null || user.user_id != null))
+  } catch {
     return false
   }
 }
@@ -417,7 +448,6 @@ async function getTodayLogForUser(userId) {
   try {
     const res = await getLogs({ userId, from: dateStr, to: dateStr, useUserDateEndpoint: true })
     const arrRaw = Array.isArray(res) ? res : (res?.content || [])
-    // Client-side safety filter: some backends ignore userId/from/to. Ensure we only look at this user's logs for today.
     const arr = arrRaw.filter(r => {
       const uid = Number(r?.userId ?? r?.user_id ?? r?.user?.id)
       const ld = String(r?.logDate || '').slice(0, 10)
@@ -430,7 +460,7 @@ async function getTodayLogForUser(userId) {
       const b = latestActionTime(r)    ?? toTs(r?.updatedAt || r?.updated_at || r?.createdAt || r?.created_at || r?.logDate)
       return (b || 0) > (a || 0) ? r : best
     }, arr[0])
-  } catch (e) {
+  } catch {
     try {
       const res2 = await getLogs({ userId, from: dateStr, to: dateStr })
       const arr2Raw = Array.isArray(res2) ? res2 : (res2?.content || [])
@@ -460,18 +490,12 @@ async function determineNextAction(userId) {
   return ACTION_SEQUENCE[count] || null
 }
 
-// === Per-user 15-MINUTE COOLDOWN (persisted) ===
-// Temporarily disabled cooldown behavior for scanning. Set to false to re-enable.
+/** ---------------- Cooldown (disabled toggle available) ---------------- */
 const COOLDOWN_MINUTES = 15
 const COOLDOWN_STORAGE_KEY = 'attnCooldowns'
 const COOLDOWN_DISABLED = false
-
-function readCooldowns() {
-  try { return JSON.parse(localStorage.getItem(COOLDOWN_STORAGE_KEY) || '{}') } catch { return {} }
-}
-function writeCooldowns(map) {
-  try { localStorage.setItem(COOLDOWN_STORAGE_KEY, JSON.stringify(map)) } catch {}
-}
+function readCooldowns() { try { return JSON.parse(localStorage.getItem(COOLDOWN_STORAGE_KEY) || '{}') } catch { return {} } }
+function writeCooldowns(map) { try { localStorage.setItem(COOLDOWN_STORAGE_KEY, JSON.stringify(map)) } catch {} }
 function getCooldownUntil(userId) {
   if (COOLDOWN_DISABLED) return 0
   if (!userId) return 0
@@ -504,45 +528,28 @@ function clearCooldownFor(userId) {
     tickCooldown()
   }
 }
-
-// ✅ If user is not listed in API logs for today, reset cooldown
 async function resetCooldownIfNoLogs(userId) {
-  if (COOLDOWN_DISABLED) return
-  if (!userId) return
+  if (COOLDOWN_DISABLED || !userId) return
   try {
     const dateStr = manilaDateYMD()
     const res = await getLogs({ userId, from: dateStr, to: dateStr, useUserDateEndpoint: true })
     const arr = Array.isArray(res) ? res : (res?.content || [])
-    if (!arr || arr.length === 0) {
-      clearCooldownFor(userId)
-    }
-  } catch {
-    // avoid false resets on API error
-  }
+    if (!arr || arr.length === 0) clearCooldownFor(userId)
+  } catch {}
 }
-
-// Selected user (for banner)
 const selectedUserId = computed(() => {
   const n = Number(form.value.manualUserId)
   return Number.isFinite(n) && n > 0 ? n : null
 })
-
-// Banner state
 const selectedCooldownLeftSec = ref(0)
 const isCoolingDownForSelected = computed(() => {
   if (!selectedUserId.value) return false
   return getCooldownUntil(selectedUserId.value) > Date.now()
 })
-
-// Timer to update banner and prune expired entries
 let cooldownTicker = null
 function tickCooldown() {
-  if (selectedUserId.value) {
-    selectedCooldownLeftSec.value = getCooldownLeftSec(selectedUserId.value)
-  } else {
-    selectedCooldownLeftSec.value = 0
-  }
-  // prune expired
+  if (selectedUserId.value) selectedCooldownLeftSec.value = getCooldownLeftSec(selectedUserId.value)
+  else selectedCooldownLeftSec.value = 0
   const map = readCooldowns()
   let changed = false
   for (const k of Object.keys(map)) {
@@ -553,22 +560,21 @@ function tickCooldown() {
 onMounted(() => { cooldownTicker = setInterval(tickCooldown, 1000); tickCooldown() })
 onBeforeUnmount(() => { if (cooldownTicker) { clearInterval(cooldownTicker); cooldownTicker = null } })
 
-// Local & server cooldown guards
 async function enforceLocalCooldownOrThrow(userId) {
   if (COOLDOWN_DISABLED) return
   const leftSec = getCooldownLeftSec(userId)
   if (leftSec > 0) {
-    // try to clear if server has no logs today
     try {
       const today = await getTodayLogForUser(userId)
       if (!today) { clearCooldownFor(userId); return }
-    } catch (_) {}
-    const leftMin = Math.ceil(getCooldownLeftSec(userId) / 60)
-    const err = new Error(`You can only scan once.`)
+    } catch {}
+    const err = new Error('You can only scan once.')
     err.code = 'COOLDOWN_LOCAL'
     throw err
   }
 }
+
+/** ---------------- Time helpers ---------------- */
 function toTs(v) {
   if (!v) return null
   if (typeof v === 'number' && !Number.isNaN(v)) return v > 1e12 ? v : v * 1000
@@ -599,20 +605,16 @@ async function enforceServerCooldownOrThrow(userId) {
     if (!lastTs) return
     const diffMin = (Date.now() - lastTs) / 60000
     if (diffMin < COOLDOWN_MINUTES) {
-      const left = Math.ceil(COOLDOWN_MINUTES - diffMin)
-      const err = new Error(`You can only scan once.`)
+      const err = new Error('You can only scan once.')
       err.code = 'COOLDOWN_SERVER'
       throw err
     }
-  } catch (e) {
+  } catch {
     // network errors -> don't block locally
   }
 }
 
-/**
- * Resolve the user from either manual id or scanned value.
- * Returns { userId, type, raw }
- */
+/** ---------------- Resolve & Build payload ---------------- */
 async function resolveUser({ manualUserId, keyboard }) {
   let userId = manualUserId
   let type = 'RFID'
@@ -623,18 +625,14 @@ async function resolveUser({ manualUserId, keyboard }) {
     if (!ok) throw new Error(`User #${userId} not found.`)
     return { userId: Number(userId), type, raw }
   }
-
   if (!raw) throw new Error('Provide a User ID or scan an RFID value.')
 
-  const looksHex = /^[0-9A-Fa-f]+$/.test(raw) && raw.length >= 8
   type = 'RFID'
-
   const user = await findUserByRfidOrBarcode(raw)
   if (user?.id || user?.userId) {
     userId = user.id || user.userId
     return { userId: Number(userId), type, raw }
   }
-
   throw new Error('User not found for given RFID.')
 }
 
@@ -665,7 +663,7 @@ function buildPayload({ userId, departmentId, departmentName, type, action, raw 
   }
 }
 
-// ---------- Actions ----------
+/** ---------------- Actions ---------------- */
 let lastSubmit = { key: '', ts: 0 }
 
 async function simulateFingerprint() {
@@ -680,10 +678,7 @@ async function simulateFingerprint() {
   if (lastSubmit.key === key && (nowTs - lastSubmit.ts) < 1500) { note(false, 'Already recorded. Please do not scan twice.'); scheduleClearFields(2000); return }
   lastSubmit = { key, ts: nowTs }
 
-  // 🔄 Sync local cooldown with server: if not listed today, clear cooldown first
   await resetCooldownIfNoLogs(targetUserId)
-
-  // Fast local guard (persists across refresh)
   await enforceLocalCooldownOrThrow(targetUserId)
 
   if (busy.value) return
@@ -691,8 +686,6 @@ async function simulateFingerprint() {
   try {
     const ok = await verifyUserExists(targetUserId)
     if (!ok) { note(false, `User #${targetUserId} not found.`); return }
-
-    // Authoritative server guard (also clears cooldown if no logs)
     await enforceServerCooldownOrThrow(targetUserId)
 
     try {
@@ -702,16 +695,15 @@ async function simulateFingerprint() {
         const name = u.fullName || u.name || [u.firstName, u.middleName, u.lastName].filter(Boolean).join(' ').trim()
         if (name) fullName.value = name
       }
-    } catch (_) {}
+    } catch {}
 
     let autoDeptId = form.value.departmentId
-    let autoDeptName = undefined
+    let autoDeptName
     if (autoDeptId == null) {
       const info = await resolveDepartmentForUser(targetUserId)
       autoDeptId = info?.departmentId
       autoDeptName = info?.departmentName
     }
-
     form.value.manualUserId = targetUserId
     if (autoDeptId != null) form.value.departmentId = Number(autoDeptId)
 
@@ -724,22 +716,31 @@ async function simulateFingerprint() {
       raw: 'SIMULATED_FP_4500'
     })
 
-    const res = await postLog(payload)
+    // 🔎 UI DEBUG: show what the component is sending into postLog (server will log final {data:...})
+    console.debug('[Scanner] simulateFingerprint payload ->', payload)
+
+    const existing = await getExistingAttendanceLog(targetUserId, payload.logDate)
+    let res
+    if (existing && (existing.logId || existing.id)) {
+      const id = existing.logId || existing.id
+      const fieldMap = { 'TIME_IN':'timeIn','TIME_OUT':'timeOut','LUNCH_START':'lunchStart','LUNCH_END':'lunchEnd','BREAK_START':'breakStart','BREAK_END':'breakEnd' }
+      const fieldName = fieldMap[nextAction] || 'timeIn'
+      const patch = { [fieldName]: payload[fieldName], action: nextAction, userId: targetUserId, logDate: payload.logDate, departmentId: autoDeptId }
+      res = await updateLog(id, patch)
+    } else {
+      res = await postLog(payload)
+    }
     pushLocal({ time: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila', hour12: true }), userId: targetUserId, type: 'FINGERPRINT', action: nextAction, departmentId: autoDeptId, departmentName: autoDeptName })
     note(true, `Fingerprint ${titleCaseFromEnum(nextAction)} logged for #${targetUserId}`)
     success = true
-    console.log('[Scanner] simulateFingerprint ->', res)
+    console.log('[Scanner] simulateFingerprint result ->', res)
     form.value.action = nextAction
     loadAdminLogs()
 
-    // Update floating modal with last scan info
-    try {
-      const scanDept = autoDeptName || getDeptName(autoDeptId)
-      const scanName = fullName.value || (selectedUser.value && (selectedUser.value.fullName || selectedUser.value.name)) || `#${targetUserId}`
-      lastScan.value = { name: String(scanName), department: String(scanDept || '') }
-    } catch (_) {}
+    const scanDept = autoDeptName || getDeptName(autoDeptId)
+    const scanName = fullName.value || (selectedUser.value && (selectedUser.value.fullName || selectedUser.value.name)) || `#${targetUserId}`
+    lastScan.value = { name: String(scanName), department: String(scanDept || '') }
 
-    // Persist per-user cooldown
     startCooldownFor(targetUserId)
   } catch (e) {
     console.error('[Scanner] simulateFingerprint error:', e)
@@ -759,8 +760,6 @@ async function onKeyboardSubmit(value) {
 }
 
 async function commit({ action, departmentId, manualUserId, keyboard }) {
-  // Rapid submit guard will be applied after we resolve user and next action
-
   if (busy.value) return
   busy.value = true
   let intendedUserId = Number(manualUserId) || null
@@ -769,56 +768,58 @@ async function commit({ action, departmentId, manualUserId, keyboard }) {
     const { userId, type, raw } = await resolveUser({ manualUserId, keyboard })
     intendedUserId = userId
 
-    // 🔄 Sync local cooldown with server: if not listed today, clear cooldown first
     await resetCooldownIfNoLogs(userId)
-
-    // Local per-user cooldown (persisted)
     await enforceLocalCooldownOrThrow(userId)
-
-    // Server-side cooldown (also clears cooldown if no logs)
     await enforceServerCooldownOrThrow(userId)
 
     const nextAction = await determineNextAction(userId)
     if (!nextAction) { note(false, 'All required scans for today are already recorded. Please do not scan again.'); return }
 
-    // Rapid re-submit guard (1.5s)
-    try {
-      const key = `${userId}|${nextAction}|${manilaDateYMD()}`
-      const nowTs = Date.now()
-      if (lastSubmit.key === key && (nowTs - lastSubmit.ts) < 1500) { note(false, 'Already recorded. Please do not scan twice.'); return }
-      lastSubmit = { key, ts: nowTs }
-    } catch (_) {}
+    const key = `${userId}|${nextAction}|${manilaDateYMD()}`
+    const nowTs = Date.now()
+    if (lastSubmit.key === key && (nowTs - lastSubmit.ts) < 1500) { note(false, 'Already recorded. Please do not scan twice.'); return }
+    lastSubmit = { key, ts: nowTs }
 
     let resolvedDeptId = departmentId
-    let resolvedDeptName = undefined
+    let resolvedDeptName
     try {
       const info = await resolveDepartmentForUser(userId)
       if (info) {
         resolvedDeptId = resolvedDeptId ?? info.departmentId
         resolvedDeptName = info.departmentName
       }
-    } catch (_) {}
+    } catch {}
 
     form.value.manualUserId = userId
     if (resolvedDeptId != null) form.value.departmentId = Number(resolvedDeptId)
 
     const payload = buildPayload({ userId, departmentId: resolvedDeptId, departmentName: resolvedDeptName, type, action: nextAction, raw })
-    const res = await postLog(payload)
+
+    // 🔎 UI DEBUG: show what the component is sending into postLog (server will log final {data:...})
+    console.debug('[Scanner] commit payload ->', payload)
+
+    const existing = await getExistingAttendanceLog(userId, payload.logDate)
+    let res
+    if (existing && (existing.logId || existing.id)) {
+      const id = existing.logId || existing.id
+      const fieldMap = { 'TIME_IN':'timeIn','TIME_OUT':'timeOut','LUNCH_START':'lunchStart','LUNCH_END':'lunchEnd','BREAK_START':'breakStart','BREAK_END':'breakEnd' }
+      const fieldName = fieldMap[nextAction] || 'timeIn'
+      const patch = { [fieldName]: payload[fieldName], action: nextAction, userId, logDate: payload.logDate, departmentId: resolvedDeptId }
+      res = await updateLog(id, patch)
+    } else {
+      res = await postLog(payload)
+    }
+
     pushLocal({ time: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila', hour12: true }), userId, type, action: nextAction, departmentId: resolvedDeptId, departmentName: resolvedDeptName })
     note(true, `${type} ${titleCaseFromEnum(nextAction)} logged for #${userId}`)
     success = true
-    console.log('[Scanner] commit payload ->', payload)
-    console.log('[Scanner] commit result  ->', res)
+    console.log('[Scanner] commit result ->', res)
     loadAdminLogs()
 
-    // Update floating modal with last scan info
-    try {
-      const scanDept = resolvedDeptName || getDeptName(resolvedDeptId)
-      const scanName = fullName.value || (selectedUser.value && (selectedUser.value.fullName || selectedUser.value.name)) || `#${userId}`
-      lastScan.value = { name: String(scanName), department: String(scanDept || '') }
-    } catch (_) {}
+    const scanDept = resolvedDeptName || getDeptName(resolvedDeptId)
+    const scanName = fullName.value || (selectedUser.value && (selectedUser.value.fullName || selectedUser.value.name)) || `#${userId}`
+    lastScan.value = { name: String(scanName), department: String(scanDept || '') }
 
-    // Persist per-user cooldown
     startCooldownFor(userId)
   } catch (e) {
     console.error('[Scanner] commit error:', e)
@@ -832,4 +833,3 @@ async function commit({ action, departmentId, manualUserId, keyboard }) {
   }
 }
 </script>
-

@@ -79,7 +79,7 @@
           <template v-if="departments.length">
             <select class="input" v-model="departmentIdSelect">
               <option value="">None</option>
-              <option v-for="d in departments" :key="d.departmentId" :value="String(d.departmentId)">{{ d.departmentName }}</option>
+              <option v-for="d in departments" :key="d.departmentId ?? d.department_id ?? d.deptId ?? d.dept_id ?? d.id" :value="String(d.departmentId ?? d.department_id ?? d.deptId ?? d.dept_id ?? d.id)">{{ d.departmentName ?? d.department_name ?? d.deptName ?? d.dept_name ?? d.name ?? d.title }}</option>
             </select>
           </template>
           <template v-else>
