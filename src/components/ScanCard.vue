@@ -56,7 +56,10 @@
 
         <div>
           <label class="label">RFID</label>
-          <input ref="scanInput" class="input" v-model="keyboard" @keyup.enter="$emit('submit', keyboard)" placeholder="Tap RFID card, then press Enter" />
+          <div class="relative">
+            <input ref="scanInput" class="input text-transparent caret-current" v-model="keyboard" @keyup.enter="$emit('submit', keyboard)" placeholder="Tap RFID card, then press Enter" />
+            <div class="pointer-events-none absolute inset-0 flex items-center px-4">{{ maskedKeyboard }}</div>
+          </div>
           <p class="hint">Most readers type the value here; press Enter after scanning.</p>
         </div>
 
@@ -151,6 +154,9 @@ const selectedDepartmentId = computed(() => {
   const v = Number(departmentIdManual.value)
   return Number.isFinite(v) ? v : undefined
 })
+
+// Masked display for RFID field
+const maskedKeyboard = computed(() => '#'.repeat(String(keyboard.value || '').length))
 
 watch([departmentIdSelect, departmentIdManual, manualUserId, action, keyboard], () => {
   emit('update:modelValue', {

@@ -107,7 +107,10 @@ async function http(path, options = {}) {
         if (b && !used.has(b)) { used.add(b); attempts.push(`${b}${urlPath}`); }
     };
 
-    // Always prioritize the configured API_BASE and FALLBACKS for all request types.
+    // First try relative path (lets Vite proxy handle CORS in dev)
+    attempts.push(urlPath);
+
+    // Then try the configured API_BASE and FALLBACKS for all request types.
     pushAttempt(API_BASE);
     for (const f of FALLBACKS) {
         pushAttempt(f);

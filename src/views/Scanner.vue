@@ -65,7 +65,7 @@
               </span>
               <input
                   ref="rfidInput"
-                  class="w-full rounded-xl border border-black/10 bg-white/80 pl-10 pr-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400"
+                  class="w-full rounded-xl border border-black/10 bg-white/80 pl-10 pr-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400 text-transparent caret-indigo-600"
                   type="text"
                   v-model.trim="form.rfide"
                   @keyup.enter="onRfidSubmit"
@@ -73,6 +73,9 @@
                   :disabled="DISABLE_RFID || busy"
                   autocomplete="off"
               />
+              <div class="pointer-events-none absolute left-10 right-3 top-1/2 -translate-y-1/2 text-neutral-900">
+                {{ maskedRfid }}
+              </div>
             </div>
           </div>
 
@@ -194,6 +197,10 @@ const form = ref({
   rfide: '',
   keyboard: ''
 })
+
+// Masked display for RFID (show # characters only)
+const maskedRfid = computed(() => '#'.repeat(String(form.value.rfide || '').length))
+
 const rfidInput = ref(null)
 const busy = ref(false)
 const lastLocalLogs = ref([])

@@ -72,7 +72,7 @@
         <table class="min-w-[900px] w-full text-sm">
           <thead class="text-left border-y border-black/10 dark:border-white/10 bg-black/[.03] dark:bg-white/[.03]">
           <tr class="[&>*]:py-2 [&>*]:px-4">
-            <th>Log ID</th>
+            <th>Full Name</th>
             <th>User ID</th>
             <th>Department</th>
             <th>Date</th>
@@ -91,7 +91,7 @@
               :key="row.logId || row.id"
               class="border-b border-black/5 dark:border-white/5 hover:bg-black/[.02] dark:hover:bg-white/[.02] transition"
           >
-            <td class="py-2 px-4">{{ row.logId ?? row.id }}</td>
+            <td class="py-2 px-4">{{ userFullName(row.userId) }}</td>
             <td class="py-2 px-4">#{{ row.userId }}</td>
             <td class="py-2 px-4">{{ displayDept(row) }}</td>
             <td class="py-2 px-4">{{ row.logDate }}</td>
@@ -132,6 +132,7 @@ const q = reactive({ userId: '', from: '', to: '' })
 
 // user -> department mapping
 const userDeptMap = ref({})
+const userNameById = ref({})
 
 // departmentId -> departmentName mapping
 const deptNameById = ref({})
@@ -233,20 +234,26 @@ async function loadDeptMeta(){
 
 async function loadUsers() {
   try {
-    const res = await getUsers()
+    const res = await getUsers({ limit: -1 })
     const list = Array.isArray(res) ? res : (res?.content || [])
-    const map = {}
+    const deptMap = {}
+    const nameMap = {}
     for (const u of list) {
       if (!u) continue
-      const id = u.userId ?? u.id
+      const id = u.userId ?? u.user_id ?? u.id
       if (id == null) continue
       const dept = pickDept(u)
-      map[String(id)] = dept || '-'
+      deptMap[String(id)] = dept || '-'
+      const fn = u.user_fname ?? u.userFname ?? u.first_name ?? u.firstName ?? u.firstname ?? u.fname
+      const ln = u.user_lname ?? u.userLname ?? u.last_name ?? u.lastName ?? u.lastname ?? u.lname
+      const nm = [fn, ln].filter(Boolean).join(' ').trim() || u.full_name || u.fullName || u.name || ''
+      nameMap[String(id)] = nm
     }
-    userDeptMap.value = map
+    userDeptMap.value = deptMap
+    userNameById.value = nameMap
   } catch (e) {
     console.warn('[AdminLogs] loadUsers failed:', e?.message || e)
-    // leave map as is; getUsers already has offline fallback
+    // leave maps as-is; getUsers already has offline fallback
   }
 }
 function pickDept(u) {
@@ -262,6 +269,11 @@ function pickDept(u) {
 }
 function userDept(userId) {
   return userDeptMap.value[String(userId ?? '')] || '-'
+}
+function userFullName(userId) {
+  const id = String(userId ?? '')
+  const nm = userNameById.value[id] || ''
+  return nm || (userId != null ? `User #${userId}` : '-')
 }
 
 function deptName(id){
