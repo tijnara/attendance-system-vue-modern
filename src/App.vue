@@ -8,7 +8,7 @@
       <router-view />
     </main>
     <footer class="text-xs opacity-70 text-center py-6">
-      Hosted on 100.119.3.44 · © tijnara
+      © tijnara
     </footer>
   </div>
 </template>

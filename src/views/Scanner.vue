@@ -110,6 +110,10 @@
             <span v-if="!busy">Scan</span>
             <span v-else>Saving…</span>
           </button>
+          <span v-if="showLateLabel" class="ml-4 flex items-center text-red-600 font-bold text-lg">
+            <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/><path stroke="currentColor" stroke-width="2" d="M12 8v4m0 4h.01"/></svg>
+            Late
+          </span>
         </div>
       </div>
 
@@ -168,7 +172,7 @@
       </div>
     </div>
 
-    <StatusToast :ok="toast.ok" :message="toast.msg" />
+    <StatusToast :ok="toast.ok" :message="toast.msg" :type="toast.type" />
   </div>
 </template>
 
@@ -206,7 +210,7 @@ const busy = ref(false)
 const lastLocalLogs = ref([])
 const toast = ref({ ok: false, msg: '' })
 const adminRows = ref([])
-
+const showLateLabel = ref(false)
 /** ---------------- Clock ---------------- */
 const now = ref(new Date())
 let t = null
@@ -323,9 +327,9 @@ const manilaIsoWithOffset = () => {
 }
 
 /** ---------------- UI helpers ---------------- */
-function note(ok, msg) {
-  toast.value = { ok, msg }
-  setTimeout(() => { toast.value = { ok: false, msg: '' } }, 3000)
+function note(ok, msg, type = '') {
+  toast.value = { ok, msg, type }
+  setTimeout(() => { toast.value = { ok: false, msg: '', type: '' } }, 3000)
 }
 function pushLocal(entry) {
   lastLocalLogs.value.unshift(entry)
@@ -543,32 +547,49 @@ async function commit({ action, departmentId, manualUserId, keyboard }) {
     form.value.manualUserId = userId
     if (resolvedDeptId != null) form.value.departmentId = Number(resolvedDeptId)
 
-    const payload = buildPayload({ userId, departmentId: resolvedDeptId, departmentName: resolvedDeptName, type, action: nextAction, raw })
+    const workStart = getWorkStartForDepartment(resolvedDeptId)
+    const payload = buildPayload({ userId, departmentId: resolvedDeptId, departmentName: resolvedDeptName, type, action: nextAction, raw, workStart })
 
     // 🔎 UI DEBUG: show what the component is sending into postLog (server will log final {data:...})
     console.debug('[Scanner] commit payload ->', payload)
 
-    const existing = await getExistingAttendanceLog(userId, payload.logDate)
+    // --- Add debug logging and strict type handling before checking for existing log ---
+    const logDateToCheck = (typeof payload.logDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(payload.logDate))
+      ? payload.logDate
+      : (typeof payload.log_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(payload.log_date))
+        ? payload.log_date
+        : (payload.logDate || payload.log_date || '').slice(0, 10);
+    const userIdToCheck = Number(userId);
+    console.debug('[Scanner] Checking for existing attendance log:', { userId: userIdToCheck, logDate: logDateToCheck });
+    const existing = await getExistingAttendanceLog(userIdToCheck, logDateToCheck)
     let res
     if (existing && (existing.logId || existing.id)) {
       const id = existing.logId || existing.id
       const fieldMap = { 'TIME_IN':'timeIn','TIME_OUT':'timeOut','LUNCH_START':'lunchStart','LUNCH_END':'lunchEnd','BREAK_START':'breakStart','BREAK_END':'breakEnd' }
       const fieldName = fieldMap[nextAction] || 'timeIn'
-      const patch = { [fieldName]: payload[fieldName], action: nextAction, userId, logDate: payload.logDate, departmentId: resolvedDeptId }
+      const patch = { [fieldName]: payload[fieldName], userId, logDate: payload.logDate || payload.log_date, departmentId: resolvedDeptId }
       res = await updateLog(id, patch)
     } else {
       res = await postLog(payload)
     }
 
     pushLocal({ time: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila', hour12: true }), userId, type, action: nextAction, departmentId: resolvedDeptId, departmentName: resolvedDeptName })
-    note(true, `${type} ${titleCaseFromEnum(nextAction)} logged for #${userId}`)
+    if (payload.status === 'Late') {
+      const scanName = fullName.value || (selectedUser.value && (selectedUser.value.fullName || selectedUser.value.name)) || `#${userId}`;
+      note(false, `${scanName},\nLate`, 'late');
+      showLateLabel.value = true;
+      setTimeout(() => { showLateLabel.value = false }, 2000);
+    } else {
+      note(true, `${type} ${titleCaseFromEnum(nextAction)} logged for #${userId}`)
+      showLateLabel.value = false;
+    }
     success = true
     console.log('[Scanner] commit result ->', res)
     loadAdminLogs()
 
     const scanDept = resolvedDeptName || getDeptName(resolvedDeptId)
     const scanName = fullName.value || (selectedUser.value && (selectedUser.value.fullName || selectedUser.value.name)) || `#${userId}`
-    lastScan.value = { name: String(scanName), department: String(scanDept || '') }
+    lastScan.value = { name: String(scanName), department: String(scanDept || ''), status: payload.status }
 
     startCooldownFor(userId)
   } catch (e) {
@@ -609,28 +630,37 @@ async function simulateFingerprint() {
     } catch {}
     form.value.manualUserId = userId;
     if (resolvedDeptId != null) form.value.departmentId = Number(resolvedDeptId);
-    const payload = buildPayload({ userId, departmentId: resolvedDeptId, departmentName: resolvedDeptName, type: 'FINGERPRINT', action: nextAction, raw: 'SIMULATED_FP_4500' });
+    const workStart = getWorkStartForDepartment(resolvedDeptId);
+    const payload = buildPayload({ userId, departmentId: resolvedDeptId, departmentName: resolvedDeptName, type: 'FINGERPRINT', action: nextAction, raw: 'SIMULATED_FP_4500', workStart });
     console.debug('[Scanner] simulateFingerprint payload ->', payload);
-    const existing = await getExistingAttendanceLog(userId, payload.log_date);
+    const existing = await getExistingAttendanceLog(userId, payload.logDate || payload.log_date);
     let res;
     if (existing && (existing.logId || existing.id)) {
       const id = existing.logId || existing.id;
       const fieldMap = { 'TIME_IN':'timeIn','TIME_OUT':'timeOut','LUNCH_START':'lunchStart','LUNCH_END':'lunchEnd','BREAK_START':'breakStart','BREAK_END':'breakEnd' };
       const fieldName = fieldMap[nextAction] || 'timeIn';
-      const patch = { [fieldName]: payload[fieldName], action: nextAction, userId, logDate: payload.log_date, departmentId: resolvedDeptId };
+      const patch = { [fieldName]: payload[fieldName], userId, logDate: payload.logDate || payload.log_date, departmentId: resolvedDeptId };
       res = await updateLog(id, patch);
     } else {
       res = await postLog(payload);
     }
     pushLocal({ time: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila', hour12: true }), userId, type: 'FINGERPRINT', action: nextAction, departmentId: resolvedDeptId, departmentName: resolvedDeptName });
-    note(true, `Fingerprint ${titleCaseFromEnum(nextAction)} logged for #${userId}`);
+    if (payload.status === 'Late') {
+      const scanName = fullName.value || (selectedUser.value && (selectedUser.value.fullName || selectedUser.value.name)) || `#${userId}`;
+      note(false, `${scanName},\nLate`, 'late');
+      showLateLabel.value = true;
+      setTimeout(() => { showLateLabel.value = false }, 2000);
+    } else {
+      note(true, `Fingerprint ${titleCaseFromEnum(nextAction)} logged for #${userId}`);
+      showLateLabel.value = false;
+    }
     success = true;
     console.log('[Scanner] simulateFingerprint result ->', res);
     form.value.action = nextAction;
     loadAdminLogs();
     const scanDept = resolvedDeptName || getDeptName(resolvedDeptId);
     const scanName = fullName.value || (selectedUser.value && (selectedUser.value.fullName || selectedUser.value.name)) || `#${userId}`;
-    lastScan.value = { name: String(scanName), department: String(scanDept || '') };
+    lastScan.value = { name: String(scanName), department: String(scanDept || ''), status: payload.status };
   } catch (e) {
     console.error('[Scanner] simulateFingerprint error:', e);
     note(false, e?.message || 'Failed to log fingerprint.');
@@ -641,10 +671,35 @@ async function simulateFingerprint() {
 }
 
 // Place buildPayload before simulateFingerprint and commit so it is always defined before use
-function buildPayload({ userId, departmentId, departmentName, type, action, raw }) {
+function getWorkStartForDepartment(departmentId) {
+  const sched = schedules.value.find(s => String(s.departmentId ?? s.department_id ?? s.id) === String(departmentId));
+  return sched?.workStart || null;
+}
+
+function isLateForWorkStart(nowDate, workStart) {
+  if (!workStart) return false;
+  // nowDate: Date object in Manila time
+  // workStart: 'HH:mm:ss' or 'HH:mm' string
+  const [h, m, s] = workStart.split(':').map(Number);
+  const workStartDate = new Date(nowDate);
+  workStartDate.setHours(h, m, s || 0, 0);
+  return nowDate > workStartDate;
+}
+
+function buildPayload({ userId, departmentId, departmentName, type, action, raw, workStart }) {
   const iso = manilaIsoWithOffset();
   const actionEnum = String(action || 'TIME_IN').trim().toUpperCase();
-  const statusName = actionEnum;
+  let statusName = actionEnum;
+  // Only check for late on TIME_IN
+  if (actionEnum === 'TIME_IN' && workStart) {
+    // Get Manila time as Date
+    const nowPH = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+    if (isLateForWorkStart(nowPH, workStart)) {
+      statusName = 'Late';
+    } else {
+      statusName = 'OnTime';
+    }
+  }
   const fieldMap = {
     'TIME_IN': 'time_in',
     'TIME_OUT': 'time_out',

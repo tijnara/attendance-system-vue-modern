@@ -328,13 +328,20 @@ export async function getDepartmentSchedules() {
  * Get existing attendance log for a user and date (Supabase version)
  */
 export async function getExistingAttendanceLog(userId, logDate) {
-  if (!userId) return null;
-  const dateStr = String(logDate).slice(0, 10);
+  if (!userId || isNaN(Number(userId))) {
+    console.error('[getExistingAttendanceLog] Invalid userId:', userId);
+    return null;
+  }
+  if (!logDate || typeof logDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(logDate)) {
+    console.error('[getExistingAttendanceLog] Invalid logDate:', logDate);
+    return null;
+  }
+  const dateStr = logDate.slice(0, 10);
   try {
     const { data, error } = await supabase
       .from('attendance_log')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', Number(userId))
       .eq('log_date', dateStr)
       .limit(1)
       .single();
