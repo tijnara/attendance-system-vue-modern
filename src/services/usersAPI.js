@@ -1,62 +1,110 @@
 // src/services/usersApi.js
-const BASE = '/items/user'
+import { supabase } from './supabase'
 
-// Generic fetch helper
-async function j(method, url, body) {
-    const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: body ? JSON.stringify(body) : undefined,
-    })
-    if (!res.ok) {
-        const txt = await res.text().catch(() => '')
-        throw new Error(`HTTP ${res.status}: ${txt || res.statusText}`)
-    }
-    return res.json().catch(() => ({}))
-}
-
-// List users (Directus-style shape: { data: [...] })
-export async function listUsers(params = {}) {
-    const usp = new URLSearchParams(params)
-    const url = `${BASE}${usp.toString() ? `?${usp}` : ''}`
-    return j('GET', url)
-}
-
-// Get user by RFID – tries Directus filter first, falls back to plain query
+/**
+ * Get user by RFID – rewritten for Supabase
+ */
 export async function getUserByRfid(rfid) {
-    // Directus filter format (rf_id is the canonical column in Directus)
-    const directusUrl = `${BASE}?filter[rf_id][_eq]=${encodeURIComponent(rfid)}&limit=1`
-    let out = await j('GET', directusUrl)
-    if (out?.data && Array.isArray(out.data)) return out.data[0] || null
-
-    // Fallback 1: plain query param with rf_id
-    let fallbackUrl = `${BASE}?rf_id=${encodeURIComponent(rfid)}`
-    out = await j('GET', fallbackUrl)
-    if (out?.data && Array.isArray(out.data)) return out.data[0] || null
-    if (Array.isArray(out)) return out[0] || null
-    if (out && typeof out === 'object' && !Array.isArray(out)) return out
-
-    // Fallback 2: legacy rfid param
-    fallbackUrl = `${BASE}?rfid=${encodeURIComponent(rfid)}`
-    out = await j('GET', fallbackUrl)
-    if (out?.data && Array.isArray(out.data)) return out.data[0] || null
-    if (Array.isArray(out)) return out[0] || null
-    return out || null
+  try {
+    const { data, error } = await supabase
+      .from('user')
+      .select('*')
+      .eq('rf_id', rfid)
+      .limit(1)
+      .single()
+    if (error) {
+      console.error('Error fetching user by RFID:', error.message)
+      return null
+    }
+    return data
+  } catch (err) {
+    console.error('Request failed:', err)
+    return null
+  }
 }
 
-// Example: get user by email (Directus filter)
+/**
+ * List users – rewritten for Supabase
+ */
+export async function listUsers(params = {}) {
+  try {
+    let query = supabase.from('user').select('*')
+    // Add filters if present in params
+    if (params.rf_id) query = query.eq('rf_id', params.rf_id)
+    if (params.email) query = query.eq('email', params.email)
+    if (params.limit) query = query.limit(Number(params.limit))
+    if (params.offset) query = query.range(Number(params.offset), Number(params.offset) + Number(params.limit || 10) - 1)
+    const { data, error } = await query
+    if (error) {
+      console.error('Error listing users:', error.message)
+      return []
+    }
+    return data
+  } catch (err) {
+    console.error('Request failed:', err)
+    return []
+  }
+}
+
+/**
+ * Get user by email – rewritten for Supabase
+ */
 export async function getUserByEmail(email) {
-    const url = `${BASE}?filter[email][_eq]=${encodeURIComponent(email)}&limit=1`
-    const out = await j('GET', url)
-    return out?.data?.[0] || null
+  try {
+    const { data, error } = await supabase
+      .from('user')
+      .select('*')
+      .eq('email', email)
+      .limit(1)
+      .single()
+    if (error) {
+      console.error('Error fetching user by email:', error.message)
+      return null
+    }
+    return data
+  } catch (err) {
+    console.error('Request failed:', err)
+    return null
+  }
 }
 
-// Create user (Directus-style expects { data: { ... } })
+/**
+ * Create user – rewritten for Supabase
+ */
 export async function createUser(user) {
-    return j('POST', BASE, { data: user })
+  try {
+    const { data, error } = await supabase
+      .from('user')
+      .insert([user])
+      .single()
+    if (error) {
+      console.error('Error creating user:', error.message)
+      return null
+    }
+    return data
+  } catch (err) {
+    console.error('Request failed:', err)
+    return null
+  }
 }
 
-// Update user by id (Directus: /items/user/:id with { data: {...} })
+/**
+ * Update user by id – rewritten for Supabase
+ */
 export async function updateUser(id, patch) {
-    return j('PATCH', `${BASE}/${encodeURIComponent(id)}`, { data: patch })
+  try {
+    const { data, error } = await supabase
+      .from('user')
+      .update(patch)
+      .eq('id', id)
+      .single()
+    if (error) {
+      console.error('Error updating user:', error.message)
+      return null
+    }
+    return data
+  } catch (err) {
+    console.error('Request failed:', err)
+    return null
+  }
 }

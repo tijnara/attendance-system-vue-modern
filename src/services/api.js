@@ -1,5 +1,7 @@
 // ======================= api.js (updated) =======================
 
+import { supabase } from './supabase'
+
 // Dynamic API base resolution with robust fallbacks (mirrors login script behavior)
 const FALLBACKS = [import.meta.env.VITE_API_BASE_URL || 'http://100.119.3.44:8055/'];
 
@@ -228,223 +230,69 @@ function isDuplicateErrorText(txt) {
     return s.includes('duplicate entry') || s.includes('uq_user_date') || s.includes('sqlstate: 23000') || s.includes('constraint');
 }
 
+/**
+ * Get logs – rewritten for Supabase
+ */
 export async function getLogs(params = {}) {
-    const origParams = params || {};
-
-    // Build Directus-compliant query
-    const q = new URLSearchParams();
-    const uid = origParams.userId ?? origParams.user_id ?? origParams.user;
-    const from = origParams.from ?? origParams.dateFrom ?? origParams.start ?? origParams.logDate;
-    const to = origParams.to ?? origParams.dateTo ?? origParams.end ?? origParams.logDate;
-
-    if (uid != null) q.append('filter[user_id][_eq]', String(uid));
-
-    const fromStr = from ? String(from).slice(0, 10) : null;
-    const toStr = to ? String(to).slice(0, 10) : null;
-
-    if (fromStr && toStr) {
-        if (fromStr === toStr) {
-            q.append('filter[log_date][_eq]', fromStr);
-        } else {
-            q.append('filter[log_date][_between]', JSON.stringify([fromStr, toStr]));
-        }
-    } else if (fromStr) {
-        q.append('filter[log_date][_eq]', fromStr);
+  try {
+    let query = supabase.from('attendance_log').select('*')
+    if (params.userId) query = query.eq('user_id', params.userId)
+    if (params.from && params.to) {
+      query = query.gte('log_date', params.from).lte('log_date', params.to)
+    } else if (params.from) {
+      query = query.eq('log_date', params.from)
     }
-
-    // Carry through some passthrough options
-    const passthroughKeys = ['limit', 'offset', 'sort', 'fields', 'page'];
-    for (const k of passthroughKeys) {
-        if (origParams[k] != null) q.append(k, String(origParams[k]));
+    if (params.limit) query = query.limit(Number(params.limit))
+    if (params.offset) query = query.range(Number(params.offset), Number(params.offset) + Number(params.limit || 10) - 1)
+    const { data, error } = await query
+    if (error) {
+      console.error('Error fetching logs:', error.message)
+      return []
     }
-
-    const qs = new URLSearchParams(origParams || {}).toString();
-    const url = q.toString() ? `/items/attendance_log?${q.toString()}` : '/items/attendance_log';
-    console.log('[API] GET', url);
-
-    const toStatusName = (v) => {
-        if (v == null) return v;
-        const n = Number(v);
-        if (!Number.isNaN(n)) { const map = {1:'OnTime',2:'Late',3:'Absent',4:'HalfDay',5:'Incomplete',6:'Leave',7:'Holiday'}; return map[n] || String(v); }
-        return String(v);
-    };
-    const normalizeRow = (r) => {
-        if (!r || typeof r !== 'object') return r;
-        const timeIn = r.timeIn ?? r.time_in ?? r.checkIn ?? r.in ?? r.timein;
-        const timeOut = r.timeOut ?? r.time_out ?? r.checkOut ?? r.out ?? r.timeout;
-        const lunchStart = r.lunchStart ?? r.lunch_start ?? r.lunchIn ?? r.lunchin;
-        const lunchEnd = r.lunchEnd ?? r.lunch_end ?? r.lunchOut ?? r.lunchout;
-        const breakStart = r.breakStart ?? r.break_start ?? r.breakIn ?? r.breakin;
-        const breakEnd = r.breakEnd ?? r.break_end ?? r.breakOut ?? r.breakout;
-        const userId = r.userId ?? r.user_id ?? r.user?.userId ?? r.user?.id ?? r.user;
-        const logDateRaw = r.logDate ?? r.log_date ?? r.date;
-        const anyTime = timeIn || timeOut || lunchStart || lunchEnd || breakStart || breakEnd || '';
-        const logDate = (logDateRaw ? String(logDateRaw) : String(anyTime)).slice(0,10);
-        const status = toStatusName(r.status ?? r.log_status);
-        const departmentId = r.departmentId ?? r.department_id ?? r.department?.departmentId ?? r.department?.id;
-        return {
-            ...r,
-            logId: r.logId ?? r.log_id ?? r.id,
-            userId: userId != null ? Number(userId) : undefined,
-            logDate,
-            timeIn, timeOut, lunchStart, lunchEnd, breakStart, breakEnd,
-            status,
-            departmentId: departmentId != null ? Number(departmentId) : undefined,
-        };
-    };
-
-    const pickList = (json) => {
-        if (!json) return [];
-        if (Array.isArray(json)) return json;
-        if (Array.isArray(json.data)) return json.data;
-        if (Array.isArray(json.content)) return json.content;
-        if (Array.isArray(json.items)) return json.items;
-        if (Array.isArray(json.records)) return json.records;
-        return [];
-    };
-
-    try {
-        const json = await http(url);
-        return pickList(json).map(normalizeRow);
-    } catch (e) {
-        console.warn('[API] getLogs failed first attempt:', e?.message || e);
-        try {
-            const legacyUrl = qs ? `/items/attendance_log?${qs}` : '/items/attendance_log';
-            const json = await http(legacyUrl);
-            return pickList(json).map(normalizeRow);
-        } catch (e2) {
-            console.warn('[API] getLogs legacy failed:', e2?.message || e2);
-            throw e2;
-        }
-    }
+    return data
+  } catch (err) {
+    console.error('Request failed:', err)
+    return []
+  }
 }
 
-async function findExistingLog(userId, logDate) {
-    const dateStr = String(logDate).slice(0, 10);
-    try {
-        const res = await getLogs({ userId, from: dateStr, to: dateStr });
-        const arr = Array.isArray(res) ? res : (res?.content || []);
-        const match = arr.find(r => {
-            const uid = String(r.userId ?? r.user?.userId ?? r.user?.id ?? r.user_id);
-            const d = (r.logDate || (r.timeIn || r.timeOut || r.lunchStart || r.lunchEnd || r.breakStart || r.breakEnd || '')).slice(0, 10);
-            return uid === String(userId) && d === dateStr;
-        });
-        return match || null;
-    } catch (_) { return null; }
+/**
+ * Post log – rewritten for Supabase
+ */
+export async function postLog(log) {
+  try {
+    const { data, error } = await supabase
+      .from('attendance_log')
+      .insert([log])
+      .single()
+    if (error) {
+      console.error('Error posting log:', error.message)
+      return null
+    }
+    return data
+  } catch (err) {
+    console.error('Request failed:', err)
+    return null
+  }
 }
 
-async function updateLogById(id, patch) {
-    async function fetchExisting() {
-        const relatives = [ `/items/attendance_log/${encodeURIComponent(id)}` ];
-        for (const rel of relatives) { try { return await http(rel, {method:'GET'}); } catch (_) {} }
-        return null;
+/**
+ * Get departments – rewritten for Supabase
+ */
+export async function getDepartments() {
+  try {
+    const { data, error } = await supabase
+      .from('department')
+      .select('*')
+    if (error) {
+      console.error('Error fetching departments:', error.message)
+      return []
     }
-
-    const existing = await fetchExisting();
-    const now = getCurrentDateTime();
-    const body = {
-        logId: existing?.logId ?? existing?.id ?? id,
-        userId: Number(patch?.userId ?? existing?.userId ?? existing?.user?.userId ?? existing?.user_id),
-        logDate: String(patch?.logDate ?? existing?.logDate ?? existing?.log_date ?? '').slice(0, 10),
-        departmentId: patch?.departmentId ?? existing?.departmentId ?? existing?.department?.departmentId ?? existing?.department_id,
-        status: patch?.status ?? existing?.status,
-        timeIn: patch?.timeIn ?? existing?.timeIn,
-        timeOut: patch?.timeOut ?? existing?.timeOut,
-        lunchStart: patch?.lunchStart ?? existing?.lunchStart,
-        lunchEnd: patch?.lunchEnd ?? existing?.lunchEnd,
-        breakStart: patch?.breakStart ?? existing?.breakStart,
-        breakEnd: patch?.breakEnd ?? existing?.breakEnd,
-        createdAt: patch?.createdAt ?? existing?.createdAt ?? now,
-        updatedAt: now,
-        action: patch?.action,
-        type: patch?.type,
-    };
-    if (body.userId != null) body.user = { userId: body.userId };
-    if (body.departmentId != null) body.department = { departmentId: Number(body.departmentId) };
-
-    try {
-        const dirData = await mapAttendanceToDirectus(body, { actionEnum: normalizeAction(body?.action), logDate: body?.logDate }).build();
-        // Ensure required keys
-        if (body.userId != null) dirData.user_id = Number(body.userId);
-        if (body.logDate) dirData.log_date = String(body.logDate).slice(0,10);
-        try { const fmap = await inferAttendanceFieldMap(); const tk = fmap?.timeKeys?.[normalizeAction(body?.action)]; const when = body.timeIn || body.timeOut || body.lunchStart || body.lunchEnd || body.breakStart || body.breakEnd || null; if (tk && when && !dirData[tk]) dirData[tk] = when; } catch {}
-        const patchRes = await http(`/items/attendance_log/${encodeURIComponent(id)}`, {
-            method:'PATCH', body: JSON.stringify(dirData)
-        });
-        if (patchRes != null) return patchRes;
-    } catch (_) {}
-    try {
-        const dirData2 = await mapAttendanceToDirectus(body, { actionEnum: normalizeAction(body?.action), logDate: body?.logDate }).build();
-        if (body.userId != null) dirData2.user_id = Number(body.userId);
-        if (body.logDate) dirData2.log_date = String(body.logDate).slice(0,10);
-        const putRes = await http(`/items/attendance_log/${encodeURIComponent(id)}`, {
-            method:'PUT', body: JSON.stringify(dirData2)
-        });
-        if (putRes != null) return putRes;
-    } catch (_) {}
-
-    const relatives = [ `/items/attendance_log/${id}` ];
-    for (const rel of relatives) {
-        try { return await http(rel, {method:'PUT', body: JSON.stringify(body)}); }
-        catch (_) {
-            try { return await http(rel, {method:'PATCH', body: JSON.stringify(body)}); }
-            catch (_) {}
-        }
-    }
-    return null;
-}
-
-async function updateLogByComposite(userId, logDate, patch) {
-    const existing = await findExistingLog(userId, logDate);
-    const now = getCurrentDateTime();
-    if (existing && (existing.logId || existing.id)) {
-        const id = existing.logId ?? existing.id;
-        const merged = {
-            ...existing, ...patch, userId: Number(userId),
-            logDate: String(logDate).slice(0,10),
-            createdAt: existing.createdAt ?? existing.created_at ?? patch?.createdAt ?? now,
-            updatedAt: now,
-        };
-        return await updateLogById(id, merged);
-    }
-
-    const body = {
-        userId: Number(userId),
-        logDate: String(logDate).slice(0, 10),
-        status: patch?.status ?? existing?.status,
-        timeIn: patch?.timeIn ?? existing?.timeIn,
-        timeOut: patch?.timeOut ?? existing?.timeOut,
-        lunchStart: patch?.lunchStart ?? existing?.lunchStart,
-        lunchEnd: patch?.lunchEnd ?? existing?.lunchEnd,
-        breakStart: patch?.breakStart ?? existing?.breakStart,
-        breakEnd: patch?.breakEnd ?? existing?.breakEnd,
-        departmentId: patch?.departmentId ?? existing?.departmentId ?? existing?.department?.departmentId,
-        createdAt: existing?.createdAt ?? existing?.created_at ?? now,
-        updatedAt: now,
-        action: patch?.action,
-        type: patch?.type,
-    };
-    if (body.userId != null) body.user = { userId: body.userId };
-    if (body.departmentId != null) body.department = { departmentId: Number(body.departmentId) };
-
-    try {
-        const dData = await mapAttendanceToDirectus(body, { actionEnum: normalizeAction(body?.action), logDate: body?.logDate }).build();
-        dData.user_id = Number(body.userId);
-        dData.log_date = String(body.logDate).slice(0,10);
-        const res = await http('/items/attendance_log', {
-            method: 'PATCH',
-            body: JSON.stringify({
-                filter: {
-                    user_id: { _eq: Number(body.userId) },
-                    log_date: { _eq: String(body.logDate).slice(0,10) }
-                },
-                data: dData
-            })
-        });
-        if (res != null) return res;
-    } catch (_) {}
-
-    return null;
+    return data
+  } catch (err) {
+    console.error('Request failed:', err)
+    return []
+  }
 }
 
 // ----------------- USERS / DEPARTMENTS -----------------
