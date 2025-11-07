@@ -467,10 +467,19 @@ function toTs(v) {
 }
 function latestActionTime(row) {
   if (!row) return null
-  const fields = ['timeOut','breakEnd','breakStart','lunchEnd','lunchStart','timeIn']
-  for (const f of fields) {
-    if (row[f]) {
-      const ts = toTs(row[f])
+  // Prefer the most recent fields first (out -> break end -> break start -> lunch end -> lunch start -> in)
+  const order = [
+    ['timeOut', 'time_out'],
+    ['breakEnd', 'break_end'],
+    ['breakStart', 'break_start'],
+    ['lunchEnd', 'lunch_end'],
+    ['lunchStart', 'lunch_start'],
+    ['timeIn', 'time_in']
+  ]
+  for (const [camel, snake] of order) {
+    const val = row[camel] ?? row[snake]
+    if (val) {
+      const ts = toTs(val)
       if (ts) return ts
     }
   }
@@ -515,13 +524,38 @@ async function getTodayLogForUser(userId) {
 }
 function countRecordedActions(row) {
   if (!row) return 0
-  const fields = ['timeIn','lunchStart','lunchEnd','breakStart','breakEnd','timeOut']
-  return fields.reduce((n, f) => n + (row[f] ? 1 : 0), 0)
+  const pairs = [
+    ['timeIn', 'time_in'],
+    ['lunchStart', 'lunch_start'],
+    ['lunchEnd', 'lunch_end'],
+    ['breakStart', 'break_start'],
+    ['breakEnd', 'break_end'],
+    ['timeOut', 'time_out']
+  ]
+  return pairs.reduce((n, [camel, snake]) => n + ((row[camel] ?? row[snake]) ? 1 : 0), 0)
+}
+function hasActionRecorded(row, action) {
+  if (!row) return false
+  const keyMap = {
+    'TIME_IN': ['time_in', 'timeIn'],
+    'LUNCH_START': ['lunch_start', 'lunchStart'],
+    'LUNCH_END': ['lunch_end', 'lunchEnd'],
+    'BREAK_START': ['break_start', 'breakStart'],
+    'BREAK_END': ['break_end', 'breakEnd'],
+    'TIME_OUT': ['time_out', 'timeOut']
+  }
+  const keys = keyMap[action] || []
+  return keys.some(k => !!row[k])
 }
 async function determineNextAction(userId) {
   const today = await getTodayLogForUser(userId)
-  const count = countRecordedActions(today)
-  return ACTION_SEQUENCE[count] || null
+  // If no log yet for today, first scan is TIME_IN
+  if (!today) return 'TIME_IN'
+  // Walk the required sequence and return the first missing action
+  for (const action of ACTION_SEQUENCE) {
+    if (!hasActionRecorded(today, action)) return action
+  }
+  return null
 }
 
 /** ---------------- Form actions ---------------- */
@@ -594,9 +628,10 @@ async function commit({ action, departmentId, manualUserId, keyboard }) {
     let res
     if (existing && (existing.logId || existing.id)) {
       const id = existing.logId || existing.id
-      const fieldMap = { 'TIME_IN':'timeIn','TIME_OUT':'timeOut','LUNCH_START':'lunchStart','LUNCH_END':'lunchEnd','BREAK_START':'breakStart','BREAK_END':'breakEnd' }
-      const fieldName = fieldMap[nextAction] || 'timeIn'
-      const patch = { [fieldName]: payload[fieldName], userId, logDate: payload.logDate || payload.log_date, departmentId: resolvedDeptId }
+      // Use snake_case keys to match Supabase attendance_log columns
+      const fieldMap = { 'TIME_IN':'time_in','TIME_OUT':'time_out','LUNCH_START':'lunch_start','LUNCH_END':'lunch_end','BREAK_START':'break_start','BREAK_END':'break_end' }
+      const fieldName = fieldMap[nextAction] || 'time_in'
+      const patch = { [fieldName]: payload[fieldName], user_id: userId, log_date: payload.log_date || payload.logDate, department_id: resolvedDeptId }
       res = await updateLog(id, patch)
     } else {
       res = await postLog(payload)
