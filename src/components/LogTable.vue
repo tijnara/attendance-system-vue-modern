@@ -14,17 +14,17 @@
         <tbody>
           <tr v-for="row in rows" :key="row.logId || row.id" class="border-b border-black/5 dark:border-white/5">
             <td class="py-2 pr-4">{{ row.logId || row.id }}</td>
-            <td class="py-2 pr-4">#{{ row.userId }}</td>
+            <td class="py-2 pr-4">#{{ row.userId ?? row.user_id }}</td>
             <td class="py-2 pr-4">
               {{ row.departmentName || row.department?.departmentName || row.department || (row.departmentId ? ('#' + row.departmentId) : '-') }}
             </td>
-            <td class="py-2 pr-4">{{ row.logDate }}</td>
-            <td class="py-2 pr-4">{{ showTime(row.timeIn) }}</td>
-            <td class="py-2 pr-4">{{ showTime(row.timeOut) }}</td>
-            <td class="py-2 pr-4 hidden sm:table-cell">{{ showTime(row.lunchStart) }}</td>
-            <td class="py-2 pr-4 hidden sm:table-cell">{{ showTime(row.lunchEnd) }}</td>
-            <td class="py-2 pr-4 hidden sm:table-cell">{{ showTime(row.breakStart) }}</td>
-            <td class="py-2 pr-4 hidden sm:table-cell">{{ showTime(row.breakEnd) }}</td>
+            <td class="py-2 pr-4">{{ row.logDate ?? row.log_date }}</td>
+            <td class="py-2 pr-4">{{ showTime(row.timeIn ?? row.time_in) }}</td>
+            <td class="py-2 pr-4">{{ showTime(row.timeOut ?? row.time_out) }}</td>
+            <td class="py-2 pr-4 hidden sm:table-cell">{{ showTime(row.lunchStart ?? row.lunch_start) }}</td>
+            <td class="py-2 pr-4 hidden sm:table-cell">{{ showTime(row.lunchEnd ?? row.lunch_end) }}</td>
+            <td class="py-2 pr-4 hidden sm:table-cell">{{ showTime(row.breakStart ?? row.break_start) }}</td>
+            <td class="py-2 pr-4 hidden sm:table-cell">{{ showTime(row.breakEnd ?? row.break_end) }}</td>
             <td class="py-2 pr-4 hidden sm:table-cell">{{ row.type || '-' }}</td>
             <td class="py-2 pr-4 hidden sm:table-cell">{{ row.action || '-' }}</td>
           </tr>
@@ -38,6 +38,24 @@
 defineProps({ rows: { type: Array, default: () => [] } })
 function toHms12(s){
   if (!s && s !== 0) return ''
+  // If s is a valid ISO string, parse as PH time
+  let dateObj = null;
+  if (typeof s === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(s)) {
+    try {
+      // Convert to PH time
+      dateObj = new Date(new Date(s).toLocaleString('en-US', { timeZone: 'Asia/Manila' }))
+    } catch {}
+  }
+  if (dateObj && !isNaN(dateObj)) {
+    let hh = dateObj.getHours()
+    const mm = String(dateObj.getMinutes()).padStart(2, '0')
+    const ss = String(dateObj.getSeconds()).padStart(2, '0')
+    const ap = hh >= 12 ? 'PM' : 'AM'
+    hh = hh % 12
+    if (hh === 0) hh = 12
+    return `${hh}:${mm}${ss ? ':' + ss : ''} ${ap}`
+  }
+  // fallback: parse as HH:mm:ss
   const m = String(s).match(/(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/)
   if (!m) return ''
   let hh = Number(m[1])
