@@ -1,2 +1,2 @@
-// This file is intentionally left blank. Use src/utils/supabase.ts for the Supabase client.
+// This file is intentionally left blank and can be deleted. The real Supabase client is in src/utils/supabase.ts.
 
