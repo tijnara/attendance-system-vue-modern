@@ -463,8 +463,8 @@ async function getTodayLogForUser(userId) {
     if (!arr?.length) return null
     if (arr.length === 1) return arr[0]
     return arr.reduce((best, r) => {
-      const a = latestActionTime(best) ?? toTs(best?.updatedAt || best?.updated_at || best?.createdAt || best?.created_at || best?.logDate)
-      const b = latestActionTime(r)    ?? toTs(r?.updatedAt || r?.updated_at || r?.createdAt || r?.created_at || r?.logDate)
+      const a = latestActionTime(best) ?? toTs(best?.updatedAt || best?.createdAt || best?.logDate)
+      const b = latestActionTime(r)    ?? toTs(r?.updatedAt || r?.createdAt || r?.logDate)
       return (b || 0) > (a || 0) ? r : best
     }, arr[0])
   } catch {
@@ -500,272 +500,19 @@ async function determineNextAction(userId) {
 /** ---------------- Cooldown (disabled toggle available) ---------------- */
 const COOLDOWN_MINUTES = 15
 const COOLDOWN_STORAGE_KEY = 'attnCooldowns'
-const COOLDOWN_DISABLED = false
-function readCooldowns() { try { return JSON.parse(localStorage.getItem(COOLDOWN_STORAGE_KEY) || '{}') } catch { return {} } }
-function writeCooldowns(map) { try { localStorage.setItem(COOLDOWN_STORAGE_KEY, JSON.stringify(map)) } catch {} }
-function getCooldownUntil(userId) {
-  if (COOLDOWN_DISABLED) return 0
-  if (!userId) return 0
-  const map = readCooldowns()
-  const v = map[String(userId)]
-  return typeof v === 'number' ? v : 0
-}
-function setCooldown(userId, minutes = COOLDOWN_MINUTES) {
-  if (!userId) return
-  const until = Date.now() + minutes * 60 * 1000
-  const map = readCooldowns()
-  map[String(userId)] = until
-  writeCooldowns(map)
-}
-function getCooldownLeftSec(userId) {
-  const until = getCooldownUntil(userId)
-  return Math.max(0, Math.ceil((until - Date.now()) / 1000))
-}
-function startCooldownFor(userId, minutes = COOLDOWN_MINUTES) {
-  if (COOLDOWN_DISABLED) return
-  setCooldown(userId, minutes)
-  tickCooldown()
-}
-function clearCooldownFor(userId) {
-  if (!userId) return
-  const map = readCooldowns()
-  if (Object.prototype.hasOwnProperty.call(map, String(userId))) {
-    delete map[String(userId)]
-    writeCooldowns(map)
-    tickCooldown()
-  }
-}
-async function resetCooldownIfNoLogs(userId) {
-  if (COOLDOWN_DISABLED || !userId) return
-  try {
-    const dateStr = manilaDateYMD()
-    const res = await getLogs({ userId, from: dateStr, to: dateStr, useUserDateEndpoint: true })
-    const arr = Array.isArray(res) ? res : (res?.content || [])
-    if (!arr || arr.length === 0) clearCooldownFor(userId)
-  } catch {}
-}
-const selectedUserId = computed(() => {
-  const n = Number(form.value.manualUserId)
-  return Number.isFinite(n) && n > 0 ? n : null
-})
-const selectedCooldownLeftSec = ref(0)
-const isCoolingDownForSelected = computed(() => {
-  if (!selectedUserId.value) return false
-  return getCooldownUntil(selectedUserId.value) > Date.now()
-})
-let cooldownTicker = null
-function tickCooldown() {
-  if (selectedUserId.value) selectedCooldownLeftSec.value = getCooldownLeftSec(selectedUserId.value)
-  else selectedCooldownLeftSec.value = 0
-  const map = readCooldowns()
-  let changed = false
-  for (const k of Object.keys(map)) {
-    if (typeof map[k] === 'number' && map[k] <= Date.now()) { delete map[k]; changed = true }
-  }
-  if (changed) writeCooldowns(map)
-}
-onMounted(() => { cooldownTicker = setInterval(tickCooldown, 1000); tickCooldown() })
-onBeforeUnmount(() => { if (cooldownTicker) { clearInterval(cooldownTicker); cooldownTicker = null } })
+const COOLDOWN_DISABLED = true // Disable all cooldown/time limit logic
+function readCooldowns() { return {} }
+function writeCooldowns(map) { /* no-op */ }
+function getCooldownUntil(userId) { return 0 }
+function setCooldown(userId, minutes = COOLDOWN_MINUTES) { /* no-op */ }
+function getCooldownLeftSec(userId) { return 0 }
+function startCooldownFor(userId, minutes = COOLDOWN_MINUTES) { /* no-op */ }
+function clearCooldownFor(userId) { /* no-op */ }
+async function resetCooldownIfNoLogs(userId) { /* no-op */ }
+async function enforceLocalCooldownOrThrow(userId) { /* no-op */ }
+async function enforceServerCooldownOrThrow(userId) { /* no-op */ }
 
-async function enforceLocalCooldownOrThrow(userId) {
-  if (COOLDOWN_DISABLED) return
-  const leftSec = getCooldownLeftSec(userId)
-  if (leftSec > 0) {
-    try {
-      const today = await getTodayLogForUser(userId)
-      if (!today) { clearCooldownFor(userId); return }
-    } catch {}
-    const err = new Error('You can only scan once.')
-    err.code = 'COOLDOWN_LOCAL'
-    throw err
-  }
-}
-
-/** ---------------- Time helpers ---------------- */
-function toTs(v) {
-  if (!v) return null
-  if (typeof v === 'number' && !Number.isNaN(v)) return v > 1e12 ? v : v * 1000
-  if (v instanceof Date) { const t = v.getTime(); return Number.isNaN(t) ? null : t }
-  const s = String(v).trim()
-  let d = new Date(s)
-  if (Number.isNaN(d.getTime())) d = new Date(s.replace(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}(:\d{2})?)$/, '$1T$2'))
-  if (Number.isNaN(d.getTime()) && /T\d{2}:\d{2}/.test(s) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(s)) d = new Date(s + 'Z')
-  const t = d.getTime()
-  return Number.isNaN(t) ? null : t
-}
-function latestActionTime(row) {
-  if (!row) return null
-  const candidates = [row.timeIn,row.time_in,row.timeOut,row.time_out,row.lunchStart,row.lunch_start,row.lunchEnd,row.lunch_end,row.breakStart,row.break_start,row.breakEnd,row.break_end]
-  const times = candidates.map(v => toTs(v)).filter(Boolean)
-  if (!times.length) {
-    const fallback = toTs(row.updatedAt || row.updated_at || row.createdAt || row.created_at || row.logDate || row.log_date)
-    return fallback || null
-  }
-  return Math.max(...times)
-}
-async function enforceServerCooldownOrThrow(userId) {
-  if (COOLDOWN_DISABLED) return
-  try {
-    const today = await getTodayLogForUser(userId)
-    if (!today) { clearCooldownFor(userId); return }
-    const lastTs = latestActionTime(today)
-    if (!lastTs) return
-    const diffMin = (Date.now() - lastTs) / 60000
-    if (diffMin < COOLDOWN_MINUTES) {
-      const err = new Error('You can only scan once.')
-      err.code = 'COOLDOWN_SERVER'
-      throw err
-    }
-  } catch {
-    // network errors -> don't block locally
-  }
-}
-
-/** ---------------- Resolve & Build payload ---------------- */
-async function resolveUser({ manualUserId, keyboard }) {
-  let userId = manualUserId
-  let type = 'RFID'
-  const raw = (keyboard || '').trim()
-
-  if (userId && !Number.isNaN(Number(userId))) {
-    const ok = await verifyUserExists(userId)
-    if (!ok) throw new Error(`User #${userId} not found.`)
-    return { userId: Number(userId), type, raw }
-  }
-  if (!raw) throw new Error('Provide a User ID or scan an RFID value.')
-
-  type = 'RFID'
-  const user = await findUserByRfidOrBarcode(raw)
-  if (user?.id || user?.userId) {
-    userId = user.id || user.userId
-    return { userId: Number(userId), type, raw }
-  }
-  throw new Error('User not found for given RFID.')
-}
-
-function buildPayload({ userId, departmentId, departmentName, type, action, raw }) {
-  const iso = manilaIsoWithOffset()
-  const actionEnum = String(action || 'TIME_IN').trim().toUpperCase()
-  const statusName = normalizeStatus(actionEnum)
-  const fieldMap = {
-    'TIME_IN': 'timeIn',
-    'TIME_OUT': 'timeOut',
-    'LUNCH_START': 'lunchStart',
-    'LUNCH_END': 'lunchEnd',
-    'BREAK_START': 'breakStart',
-    'BREAK_END': 'breakEnd'
-  }
-  const fieldName = fieldMap[actionEnum] || 'timeIn'
-  const timed = { [fieldName]: iso }
-  return {
-    userId,
-    departmentId: departmentId || undefined,
-    departmentName: departmentName || undefined,
-    logDate: iso.slice(0, 10),
-    ...timed,
-    type,           // FINGERPRINT | RFID
-    action: actionEnum,
-    status: statusName,
-    raw: raw || undefined
-  }
-}
-
-/** ---------------- Actions ---------------- */
-let lastSubmit = { key: '', ts: 0 }
-
-async function simulateFingerprint() {
-  let success = false
-  const targetUserId = Number(form.value.manualUserId)
-  if (!Number.isFinite(targetUserId) || targetUserId <= 0) { note(false, 'No user found.'); scheduleClearFields(2000); return }
-  const nextAction = await determineNextAction(targetUserId)
-  if (!nextAction) { note(false, 'All required scans for today are already recorded. Please do not scan again.'); scheduleClearFields(2000); return }
-
-  const key = `${targetUserId}|${nextAction}|${manilaDateYMD()}`
-  const nowTs = Date.now()
-  if (lastSubmit.key === key && (nowTs - lastSubmit.ts) < 1500) { note(false, 'Already recorded. Please do not scan twice.'); scheduleClearFields(2000); return }
-  lastSubmit = { key, ts: nowTs }
-
-  await resetCooldownIfNoLogs(targetUserId)
-  await enforceLocalCooldownOrThrow(targetUserId)
-
-  if (busy.value) return
-  busy.value = true
-  try {
-    const ok = await verifyUserExists(targetUserId)
-    if (!ok) { note(false, `User #${targetUserId} not found.`); return }
-    await enforceServerCooldownOrThrow(targetUserId)
-
-    try {
-      const u = await getUserById(targetUserId)
-      if (u) {
-        selectedUser.value = u
-        const name = u.fullName || u.name || [u.firstName, u.middleName, u.lastName].filter(Boolean).join(' ').trim()
-        if (name) fullName.value = name
-      }
-    } catch {}
-
-    let autoDeptId = form.value.departmentId
-    let autoDeptName
-    if (autoDeptId == null) {
-      const info = await resolveDepartmentForUser(targetUserId)
-      autoDeptId = info?.departmentId
-      autoDeptName = info?.departmentName
-    }
-    form.value.manualUserId = targetUserId
-    if (autoDeptId != null) form.value.departmentId = Number(autoDeptId)
-
-    const payload = buildPayload({
-      userId: targetUserId,
-      departmentId: autoDeptId,
-      departmentName: autoDeptName,
-      type: 'FINGERPRINT',
-      action: nextAction,
-      raw: 'SIMULATED_FP_4500'
-    })
-
-    // 🔎 UI DEBUG: show what the component is sending into postLog (server will log final {data:...})
-    console.debug('[Scanner] simulateFingerprint payload ->', payload)
-
-    const existing = await getExistingAttendanceLog(targetUserId, payload.logDate)
-    let res
-    if (existing && (existing.logId || existing.id)) {
-      const id = existing.logId || existing.id
-      const fieldMap = { 'TIME_IN':'timeIn','TIME_OUT':'timeOut','LUNCH_START':'lunchStart','LUNCH_END':'lunchEnd','BREAK_START':'breakStart','BREAK_END':'breakEnd' }
-      const fieldName = fieldMap[nextAction] || 'timeIn'
-      const patch = { [fieldName]: payload[fieldName], action: nextAction, userId: targetUserId, logDate: payload.logDate, departmentId: autoDeptId }
-      res = await updateLog(id, patch)
-    } else {
-      res = await postLog(payload)
-    }
-    pushLocal({ time: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila', hour12: true }), userId: targetUserId, type: 'FINGERPRINT', action: nextAction, departmentId: autoDeptId, departmentName: autoDeptName })
-    note(true, `Fingerprint ${titleCaseFromEnum(nextAction)} logged for #${targetUserId}`)
-    success = true
-    console.log('[Scanner] simulateFingerprint result ->', res)
-    form.value.action = nextAction
-    loadAdminLogs()
-
-    const scanDept = autoDeptName || getDeptName(autoDeptId)
-    const scanName = fullName.value || (selectedUser.value && (selectedUser.value.fullName || selectedUser.value.name)) || `#${targetUserId}`
-    lastScan.value = { name: String(scanName), department: String(scanDept || '') }
-
-    startCooldownFor(targetUserId)
-  } catch (e) {
-    console.error('[Scanner] simulateFingerprint error:', e)
-    const msg = e?.message || 'Failed to log fingerprint.'
-    const m = msg.match(/wait\s+(\d+)\s+minute/i)
-    if (m) startCooldownFor(targetUserId, Number(m[1]) || COOLDOWN_MINUTES)
-    note(false, msg)
-  } finally {
-    scheduleClearFields(success ? 0 : 2000)
-    busy.value = false
-  }
-}
-
-async function onKeyboardSubmit(value) {
-  form.value.keyboard = value
-  await commit(form.value)
-}
-
+/** ---------------- Form actions ---------------- */
 async function commit({ action, departmentId, manualUserId, keyboard }) {
   if (busy.value) return
   busy.value = true
@@ -774,10 +521,6 @@ async function commit({ action, departmentId, manualUserId, keyboard }) {
   try {
     const { userId, type, raw } = await resolveUser({ manualUserId, keyboard })
     intendedUserId = userId
-
-    await resetCooldownIfNoLogs(userId)
-    await enforceLocalCooldownOrThrow(userId)
-    await enforceServerCooldownOrThrow(userId)
 
     const nextAction = await determineNextAction(userId)
     if (!nextAction) { note(false, 'All required scans for today are already recorded. Please do not scan again.'); return }
@@ -838,5 +581,90 @@ async function commit({ action, departmentId, manualUserId, keyboard }) {
     scheduleClearFields(success ? 0 : 2000)
     busy.value = false
   }
+}
+
+async function simulateFingerprint() {
+  if (busy.value) return;
+  busy.value = true;
+  let success = false;
+  try {
+    const userId = Number(form.value.manualUserId);
+    if (!userId) {
+      note(false, 'Please enter a valid Employee No.');
+      return;
+    }
+    const nextAction = await determineNextAction(userId);
+    if (!nextAction) {
+      note(false, 'All required scans for today are already recorded. Please do not scan again.');
+      return;
+    }
+    let resolvedDeptId = form.value.departmentId;
+    let resolvedDeptName;
+    try {
+      const info = await resolveDepartmentForUser(userId);
+      if (info) {
+        resolvedDeptId = resolvedDeptId ?? info.departmentId;
+        resolvedDeptName = info.departmentName;
+      }
+    } catch {}
+    form.value.manualUserId = userId;
+    if (resolvedDeptId != null) form.value.departmentId = Number(resolvedDeptId);
+    const payload = buildPayload({ userId, departmentId: resolvedDeptId, departmentName: resolvedDeptName, type: 'FINGERPRINT', action: nextAction, raw: 'SIMULATED_FP_4500' });
+    console.debug('[Scanner] simulateFingerprint payload ->', payload);
+    const existing = await getExistingAttendanceLog(userId, payload.log_date);
+    let res;
+    if (existing && (existing.logId || existing.id)) {
+      const id = existing.logId || existing.id;
+      const fieldMap = { 'TIME_IN':'timeIn','TIME_OUT':'timeOut','LUNCH_START':'lunchStart','LUNCH_END':'lunchEnd','BREAK_START':'breakStart','BREAK_END':'breakEnd' };
+      const fieldName = fieldMap[nextAction] || 'timeIn';
+      const patch = { [fieldName]: payload[fieldName], action: nextAction, userId, logDate: payload.log_date, departmentId: resolvedDeptId };
+      res = await updateLog(id, patch);
+    } else {
+      res = await postLog(payload);
+    }
+    pushLocal({ time: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila', hour12: true }), userId, type: 'FINGERPRINT', action: nextAction, departmentId: resolvedDeptId, departmentName: resolvedDeptName });
+    note(true, `Fingerprint ${titleCaseFromEnum(nextAction)} logged for #${userId}`);
+    success = true;
+    console.log('[Scanner] simulateFingerprint result ->', res);
+    form.value.action = nextAction;
+    loadAdminLogs();
+    const scanDept = resolvedDeptName || getDeptName(resolvedDeptId);
+    const scanName = fullName.value || (selectedUser.value && (selectedUser.value.fullName || selectedUser.value.name)) || `#${userId}`;
+    lastScan.value = { name: String(scanName), department: String(scanDept || '') };
+  } catch (e) {
+    console.error('[Scanner] simulateFingerprint error:', e);
+    note(false, e?.message || 'Failed to log fingerprint.');
+  } finally {
+    scheduleClearFields(success ? 0 : 2000);
+    busy.value = false;
+  }
+}
+
+// Place buildPayload before simulateFingerprint and commit so it is always defined before use
+function buildPayload({ userId, departmentId, departmentName, type, action, raw }) {
+  const iso = manilaIsoWithOffset();
+  const actionEnum = String(action || 'TIME_IN').trim().toUpperCase();
+  const statusName = actionEnum;
+  const fieldMap = {
+    'TIME_IN': 'time_in',
+    'TIME_OUT': 'time_out',
+    'LUNCH_START': 'lunch_start',
+    'LUNCH_END': 'lunch_end',
+    'BREAK_START': 'break_start',
+    'BREAK_END': 'break_end'
+  };
+  const fieldName = fieldMap[actionEnum] || 'time_in';
+  const timed = { [fieldName]: iso };
+  return {
+    user_id: userId,
+    department_id: departmentId || undefined,
+    departmentName: departmentName || undefined,
+    log_date: iso.slice(0, 10),
+    ...timed,
+    type,           // FINGERPRINT | RFID
+    action: actionEnum,
+    status: statusName,
+    raw: raw || undefined
+  };
 }
 </script>

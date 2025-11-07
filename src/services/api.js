@@ -236,7 +236,7 @@ function isDuplicateErrorText(txt) {
 export async function getLogs(params = {}) {
   try {
     let query = supabase.from('attendance_log').select('*')
-    if (params.userId) query = query.eq('user_id', params.userId)
+    if (params.user_id) query = query.eq('user_id', params.user_id)
     if (params.from && params.to) {
       query = query.gte('log_date', params.from).lte('log_date', params.to)
     } else if (params.from) {
@@ -260,18 +260,25 @@ export async function getLogs(params = {}) {
  * Post log – rewritten for Supabase
  */
 export async function postLog(log) {
+  // Only keep fields that exist in your attendance_log table
+  const allowed = ['user_id', 'log_date', 'department_id', 'status', 'time_in', 'time_out', 'lunch_start', 'lunch_end', 'break_start', 'break_end', 'created_at', 'updated_at'];
+  const filtered = Object.fromEntries(Object.entries(log).filter(([k]) => allowed.includes(k)));
+  if (!filtered.user_id || !filtered.log_date) {
+    console.error('[postLog] Missing required fields:', { user_id: filtered.user_id, log_date: filtered.log_date, original: log });
+    throw new Error('user_id and log_date are required for attendance_log');
+  }
   try {
     const { data, error } = await supabase
       .from('attendance_log')
-      .insert([log])
-      .single()
+      .insert([filtered])
+      .single();
     if (error) {
-      console.error('Error posting log:', error.message)
+      console.error('Error posting log:', error.message, error.details, filtered);
       return null
     }
     return data
   } catch (err) {
-    console.error('Request failed:', err)
+    console.error('Request failed:', err, filtered);
     return null
   }
 }
@@ -297,287 +304,10 @@ export async function getDepartments(params = {}) {
     }
   }
   // Otherwise, fallback to legacy HTTP logic for advanced queries
-  const qs = new URLSearchParams(params || {}).toString();
-  const candidates = [
-    qs ? `/items/department?${qs}` : '/items/department',
-    qs ? `/api/department?${qs}` : '/api/department',
-    qs ? `/api/departments?${qs}` : '/api/departments',
-  ];
-  let lastErr;
-  for (const url of candidates) {
-    console.log('[API] GET', url);
-    try {
-      const res = await http(url);
-      if (Array.isArray(res)) return res;
-      if (Array.isArray(res?.data)) return res.data;
-      if (Array.isArray(res?.data?.data)) return res.data.data;
-      if (Array.isArray(res?.content)) return res.content;
-      if (Array.isArray(res?.items)) return res.items;
-      if (Array.isArray(res?.records)) return res.records;
-      if (res && typeof res === 'object') return [res];
-      return [];
-    } catch (e) { lastErr = e; console.warn('[API] getDepartments failed on', url, '->', e?.message || e); }
-  }
   return [];
 }
 
-export async function getUsers(params = {}) {
-    try {
-        let query = supabase.from('user').select('*');
-        if (params && typeof params === 'object') {
-            Object.entries(params).forEach(([key, value]) => {
-                if (value !== undefined && value !== null && value !== '') {
-                    query = query.eq(key, value);
-                }
-            });
-        }
-        const { data, error } = await query;
-        if (error) {
-            console.error('[API] getUsers failed (Supabase):', error.message);
-            return [];
-        }
-        return data || [];
-    } catch (err) {
-        console.error('[API] getUsers failed (Supabase):', err?.message || err);
-        return [];
-    }
-}
-
-export async function getUserById(id, opts = {}) {
-    if (!id && id !== 0) throw new Error('User ID required');
-    const sid = String(id);
-    try {
-        const { data, error } = await supabase
-            .from('user')
-            .select('*')
-            .or(`user_id.eq.${sid},id.eq.${sid}`)
-            .limit(1)
-            .single();
-        if (error) {
-            if (error.code === 'PGRST116') return null; // Not found
-            console.error('[API] getUserById failed (Supabase):', error.message);
-            return null;
-        }
-        return data;
-    } catch (err) {
-        console.error('[API] getUserById failed (Supabase):', err?.message || err);
-        return null;
-    }
-}
-
-export async function resolveDepartmentForUser(userId) {
-    try {
-        const user = await getUserById(userId);
-        if (!user) return null;
-
-        const directId = user.departmentId ?? user.department_id ?? user?.department?.departmentId ?? user?.department?.id;
-        const directName = user.departmentName ?? user.department_name ?? user?.department?.departmentName ?? user?.department?.name;
-        if (directId != null) return { departmentId: Number(directId), departmentName: directName ?? null };
-        if (!directName) return null;
-
-        const norm = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-        const target = norm(directName);
-
-        let list = [];
-        try {
-            const res = await getDepartments();
-            if (Array.isArray(res)) list = res;
-            else if (Array.isArray(res?.data)) list = res.data;
-            else if (Array.isArray(res?.data?.data)) list = res.data.data;
-            else if (Array.isArray(res?.content)) list = res.content;
-        } catch (_) { list = []; }
-        if (!list.length) return null;
-
-        const match = list.find(d => norm(d.departmentName || d.name) === target);
-        if (!match) return null;
-        const id = match.departmentId ?? match.id;
-        return id != null ? { departmentId: Number(id), departmentName: match.departmentName || match.name || null } : null;
-    } catch (_) { return null; }
-}
-
-export async function findUserByRfidOrBarcode(value) {
-    if (!value) return null;
-
-    const normalizeUser = (u) => {
-        if (!u) return null;
-        return {
-            id: u.id ?? u.user_id ?? u.userId ?? null,
-            userId: u.user_id ?? u.userId ?? u.id ?? null,
-            email: u.user_email ?? u.email ?? null,
-            password: u.user_password ?? u.password ?? null,
-            fullName: [u.user_fname, u.user_mname, u.user_lname].filter(Boolean).join(' ') || u.fullName || null,
-            position: u.user_position ?? u.position ?? null,
-            departmentId: u.user_department ?? u.departmentId ?? null,
-            departmentName: u.departmentName ?? null,
-            branchId: u.branchId ?? null,
-            branchName: u.branchName ?? null,
-            operationId: u.operationId ?? null,
-            isActive: u.isActive ?? true,
-            mobileNumber: u.user_contact ?? u.mobileNumber ?? null,
-            image: u.user_image ?? u.image ?? null,
-            externalId: u.external_id ?? u.externalId ?? null,
-            rfId: u.rf_id ?? u.rfId ?? u.rfid ?? null,
-            dateOfHire: u.user_dateOfHire ?? u.dateOfHire ?? null,
-            tags: u.user_tags ?? u.tags ?? null,
-            province: u.user_province ?? u.province ?? null,
-            city: u.user_city ?? u.city ?? null,
-            barangay: u.user_brgy ?? u.barangay ?? null,
-            sss: u.user_sss ?? u.sss ?? null,
-            philhealth: u.user_philhealth ?? u.philhealth ?? null,
-            tin: u.user_tin ?? u.tin ?? null,
-            birthday: u.user_bday ?? u.birthday ?? null,
-            updatedAt: u.updateAt ?? u.update_at ?? u.updatedAt ?? null,
-            isDeleted: u.is_deleted ?? u.isDeleted ?? null,
-            roleId: u.role_id ?? u.roleId ?? null,
-            token: u.token ?? null,
-        };
-    };
-
-    const rf = encodeURIComponent(value);
-    async function tryFetch(path) { try { return await http(path); } catch (_) { return null; } }
-
-    const attempts = [
-        `/items/user?filter[rf_id][_eq]=${rf}&limit=1`,
-        `/items/user?rf_id=${rf}`,
-        `/items/user?rfid=${rf}`,
-    ];
-
-    for (const path of attempts) {
-        const res = await tryFetch(path);
-        if (!res) continue;
-        let userRaw = null;
-        if (Array.isArray(res)) userRaw = res[0];
-        else if (res?.data && Array.isArray(res.data)) userRaw = res.data[0];
-        else if (res?.content && Array.isArray(res.content)) userRaw = res.content[0];
-        else userRaw = res;
-        const user = normalizeUser(userRaw);
-        if (user && (user.userId || user.fullName || user.rfId)) {
-            console.log('[API] normalized user object:', user);
-            return user;
-        }
-    }
-    console.warn('[API] rfid search failed: user not found');
-    return null;
-}
-
-// ----------------- Department Schedules -----------------
-function normalizeSchedule(raw) {
-    if (!raw) return null;
-    return {
-        scheduleId: raw.scheduleId ?? raw.schedule_id ?? raw.id ?? null,
-        departmentId: raw.departmentId ?? raw.department_id ?? raw.deptId ?? raw.dept_id ?? null,
-        workingDays: raw.workingDays ?? raw.working_days ?? raw.days ?? null,
-        workStart: raw.workStart ?? raw.work_start ?? raw.start ?? null,
-        workEnd: raw.workEnd ?? raw.work_end ?? raw.end ?? null,
-        lunchStart: raw.lunchStart ?? raw.lunch_start ?? null,
-        lunchEnd: raw.lunchEnd ?? raw.lunch_end ?? null,
-        breakStart: raw.breakStart ?? raw.break_start ?? null,
-        breakEnd: raw.breakEnd ?? raw.break_end ?? null,
-        workdaysNote: raw.workdaysNote ?? raw.workdays_note ?? raw.note ?? '',
-        createdAt: raw.createdAt ?? raw.created_at ?? null,
-        updatedAt: raw.updatedAt ?? raw.updated_at ?? null,
-    };
-}
-
-function buildSchedulePayload(data, {isUpdate = false} = {}) {
-    const createdAt = data.createdAt ?? data.created_at ?? nowIsoNoMillis();
-    const updatedAt = data.updatedAt ?? data.updated_at ?? nowIsoNoMillis();
-    const base = {
-        scheduleId: data.scheduleId ?? undefined,
-        departmentId: data.departmentId != null ? Number(data.departmentId) : undefined,
-        workingDays: data.workingDays != null ? Number(data.workingDays) : undefined,
-        workStart: data.workStart != null ? `${String(data.workStart).slice(0,5)}:00` : undefined,
-        workEnd: data.workEnd != null ? `${String(data.workEnd).slice(0,5)}:00` : undefined,
-        lunchStart: data.lunchStart != null ? `${String(data.lunchStart).slice(0,5)}:00` : undefined,
-        lunchEnd: data.lunchEnd != null ? `${String(data.lunchEnd).slice(0,5)}:00` : undefined,
-        breakStart: data.breakStart != null ? `${String(data.breakStart).slice(0,5)}:00` : undefined,
-        breakEnd: data.breakEnd != null ? `${String(data.breakEnd).slice(0,5)}:00` : undefined,
-        workdaysNote: (data.workdaysNote ?? null),
-        createdAt, updatedAt,
-    };
-    const snake = {
-        schedule_id: base.scheduleId, department_id: base.departmentId, working_days: base.workingDays,
-        work_start: base.workStart, work_end: base.workEnd, lunch_start: base.lunchStart, lunch_end: base.lunchEnd,
-        break_start: base.breakStart, break_end: base.breakEnd, workdays_note: base.workdaysNote,
-        created_at: base.createdAt, updated_at: base.updatedAt,
-    };
-    return { ...base, ...snake };
-}
-
-export async function getScheduleByDepartment(departmentId) {
-    if (!departmentId && departmentId !== 0) return null;
-    const did = encodeURIComponent(departmentId);
-    const candidates = [
-        `/items/department_schedule?filter[department_id][_eq]=${did}&limit=1`,
-        `/api/schedules?departmentId=${did}`,
-        `/api/department-schedules?departmentId=${did}`,
-        `/api/schedule?departmentId=${did}`,
-        `/api/departments/${did}/schedule`,
-    ];
-    let lastErr;
-    for (const url of candidates) {
-        try {
-            const res = await http(url);
-            let rec = null;
-            if (res?.data && Array.isArray(res.data)) rec = res.data.find(r => String(r.departmentId ?? r.department_id ?? r.deptId ?? r.dept_id) === String(departmentId)) || res.data[0] || null;
-            else if (Array.isArray(res)) rec = res.find(r => String(r.departmentId ?? r.department_id ?? r.deptId ?? r.dept_id) === String(departmentId)) || res[0] || null;
-            else if (res?.content && Array.isArray(res.content)) rec = res.content.find(r => String(r.departmentId ?? r.department_id ?? r.deptId ?? r.dept_id) === String(departmentId)) || res.content[0] || null;
-            else if (res && typeof res === 'object') rec = res;
-            if (rec) return normalizeSchedule(rec);
-        } catch (e) { lastErr = e; console.warn('[API] getScheduleByDepartment failed on', url, '->', e?.message || e); }
-    }
-    if (lastErr) throw lastErr;
-    return null;
-}
-
-export async function createSchedule(data) {
-    const body = JSON.stringify(buildSchedulePayload(data, {isUpdate:false}));
-    const candidates = ['/items/department_schedule', '/api/schedules', '/api/department-schedules', '/api/schedule'];
-    let lastErr;
-    for (const url of candidates) {
-        try {
-            const res = await http(url, {method:'POST', body});
-            const payload = res?.data ?? res;
-            return payload ? normalizeSchedule(payload) : null;
-        } catch (e) { lastErr = e; console.warn('[API] createSchedule failed on', url, '->', e?.message || e); }
-    }
-    throw lastErr || new Error('Failed to create schedule');
-}
-
-export async function updateSchedule(id, data) {
-    if (!id && id !== 0) throw new Error('schedule id required');
-    const sid = encodeURIComponent(id);
-    const body = JSON.stringify(buildSchedulePayload(data, {isUpdate:true}));
-    const candidates = [
-        `/items/department_schedule/${sid}`, `/api/schedules/${sid}`, `/api/department-schedules/${sid}`, `/api/schedule/${sid}`,
-    ];
-    let lastErr;
-    for (const url of candidates) {
-        for (const method of ['PUT','PATCH']) {
-            try {
-                const res = await http(url, {method, body});
-                const payload = res?.data ?? res;
-                return payload ? normalizeSchedule(payload) : null;
-            } catch (e) { lastErr = e; console.warn(`[API] updateSchedule ${method} failed on`, url, '->', e?.message || e); }
-        }
-    }
-    throw lastErr || new Error('Failed to update schedule');
-}
-
-export async function deleteSchedule(id) {
-    if (!id && id !== 0) throw new Error('schedule id required');
-    const sid = encodeURIComponent(id);
-    const candidates = [
-        `/items/department_schedule/${sid}`, `/api/schedules/${sid}`, `/api/department-schedules/${sid}`, `/api/schedule/${sid}`,
-    ];
-    let lastErr;
-    for (const url of candidates) {
-        try { const res = await http(url, {method:'DELETE'}); return res ?? true; }
-        catch (e) { lastErr = e; console.warn('[API] deleteSchedule failed on', url, '->', e?.message || e); }
-    }
-    throw lastErr || new Error('Failed to delete schedule');
-}
-
+// --- Department Schedule ---
 export async function getDepartmentSchedules() {
     try {
         const { data, error } = await supabase
@@ -587,7 +317,7 @@ export async function getDepartmentSchedules() {
             console.error('[API] getDepartmentSchedules failed (Supabase):', error.message);
             throw error;
         }
-        return Array.isArray(data) ? data.map(normalizeSchedule) : [];
+        return Array.isArray(data) ? data : [];
     } catch (err) {
         console.error('[API] getDepartmentSchedules failed (Supabase):', err?.message || err);
         throw err;
@@ -609,7 +339,6 @@ export async function getExistingAttendanceLog(userId, logDate) {
       .limit(1)
       .single();
     if (error) {
-      // If not found, Supabase returns error, but that's not a real error
       if (error.code === 'PGRST116') return null;
       console.error('Error fetching existing attendance log:', error.message);
       return null;
@@ -626,12 +355,14 @@ export async function getExistingAttendanceLog(userId, logDate) {
  */
 export async function updateLog(id, patch) {
   if (!id) return null;
+  // Only keep fields that exist in your attendance_log table
+  const allowed = ['user_id', 'log_date', 'department_id', 'status', 'time_in', 'time_out', 'lunch_start', 'lunch_end', 'break_start', 'break_end', 'created_at', 'updated_at'];
+  const filtered = Object.fromEntries(Object.entries(patch).filter(([k]) => allowed.includes(k)));
   try {
     const { data, error } = await supabase
       .from('attendance_log')
-      .update(patch)
-      .eq('id', id)
-      .single();
+      .update(filtered)
+      .eq('id', id);
     if (error) {
       console.error('Error updating attendance log:', error.message);
       return null;
@@ -641,4 +372,85 @@ export async function updateLog(id, patch) {
     console.error('Request failed:', err);
     return null;
   }
+}
+
+// --- User ---
+export async function getUsers(params = {}) {
+    try {
+        let query = supabase.from('user').select('*');
+        if (params && typeof params === 'object') {
+            Object.entries(params).forEach(([key, value]) => {
+                if (value !== undefined && value !== null && value !== '') {
+                    if (["id","rf_id","fullName","email","position","department_id","image"].includes(key)) {
+                        query = query.eq(key, value);
+                    }
+                }
+            });
+        }
+        const { data, error } = await query;
+        if (error) {
+            console.error('[API] getUsers failed (Supabase):', error.message);
+            return [];
+        }
+        return data || [];
+    } catch (err) {
+        console.error('[API] getUsers failed (Supabase):', err?.message || err);
+        return [];
+    }
+}
+
+export async function getUserById(id) {
+    if (!id && id !== 0) throw new Error('User ID required');
+    const sid = String(id);
+    try {
+        const { data, error } = await supabase
+            .from('user')
+            .select('*')
+            .eq('id', sid)
+            .limit(1)
+            .single();
+        if (error) {
+            if (error.code === 'PGRST116') return null; // Not found
+            console.error('[API] getUserById failed (Supabase):', error.message);
+            return null;
+        }
+        return data;
+    } catch (err) {
+        console.error('[API] getUserById failed (Supabase):', err?.message || err);
+        return null;
+    }
+}
+
+export async function findUserByRfidOrBarcode(value) {
+    if (!value) return null;
+    const { data, error } = await supabase
+        .from('user')
+        .select('*')
+        .eq('rf_id', value)
+        .limit(1)
+        .single();
+    if (error) {
+        console.error('Error fetching user by RFID or Barcode:', error.message);
+        return null;
+    }
+    return data;
+}
+
+export async function resolveDepartmentForUser(userId) {
+    if (!userId) return null;
+    const user = await supabase
+        .from('user')
+        .select('department_id')
+        .eq('id', userId)
+        .single();
+    if (user.error || !user.data) return null;
+    const departmentId = user.data.department_id;
+    if (!departmentId) return null;
+    const department = await supabase
+        .from('department')
+        .select('*')
+        .eq('id', departmentId)
+        .single();
+    if (department.error || !department.data) return null;
+    return department.data;
 }
