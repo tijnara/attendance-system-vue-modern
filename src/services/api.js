@@ -279,46 +279,46 @@ export async function postLog(log) {
 /**
  * Get departments – rewritten for Supabase
  */
-export async function getDepartments() {
-  try {
-    const { data, error } = await supabase
-      .from('department')
-      .select('*')
-    if (error) {
-      console.error('Error fetching departments:', error.message)
+export async function getDepartments(params = {}) {
+  // If params is empty or not used, use Supabase directly
+  if (!params || Object.keys(params).length === 0) {
+    try {
+      const { data, error } = await supabase
+        .from('department')
+        .select('*')
+      if (error) {
+        console.error('Error fetching departments:', error.message)
+        return []
+      }
+      return data
+    } catch (err) {
+      console.error('Request failed:', err)
       return []
     }
-    return data
-  } catch (err) {
-    console.error('Request failed:', err)
-    return []
   }
-}
-
-// ----------------- USERS / DEPARTMENTS -----------------
-export async function getDepartments(params = {}) {
-    const qs = new URLSearchParams(params || {}).toString();
-    const candidates = [
-        qs ? `/items/department?${qs}` : '/items/department',
-        qs ? `/api/department?${qs}` : '/api/department',
-        qs ? `/api/departments?${qs}` : '/api/departments',
-    ];
-    let lastErr;
-    for (const url of candidates) {
-        console.log('[API] GET', url);
-        try {
-            const res = await http(url);
-            if (Array.isArray(res)) return res;
-            if (Array.isArray(res?.data)) return res.data;
-            if (Array.isArray(res?.data?.data)) return res.data.data;
-            if (Array.isArray(res?.content)) return res.content;
-            if (Array.isArray(res?.items)) return res.items;
-            if (Array.isArray(res?.records)) return res.records;
-            if (res && typeof res === 'object') return [res];
-            return [];
-        } catch (e) { lastErr = e; console.warn('[API] getDepartments failed on', url, '->', e?.message || e); }
-    }
-    return [];
+  // Otherwise, fallback to legacy HTTP logic for advanced queries
+  const qs = new URLSearchParams(params || {}).toString();
+  const candidates = [
+    qs ? `/items/department?${qs}` : '/items/department',
+    qs ? `/api/department?${qs}` : '/api/department',
+    qs ? `/api/departments?${qs}` : '/api/departments',
+  ];
+  let lastErr;
+  for (const url of candidates) {
+    console.log('[API] GET', url);
+    try {
+      const res = await http(url);
+      if (Array.isArray(res)) return res;
+      if (Array.isArray(res?.data)) return res.data;
+      if (Array.isArray(res?.data?.data)) return res.data.data;
+      if (Array.isArray(res?.content)) return res.content;
+      if (Array.isArray(res?.items)) return res.items;
+      if (Array.isArray(res?.records)) return res.records;
+      if (res && typeof res === 'object') return [res];
+      return [];
+    } catch (e) { lastErr = e; console.warn('[API] getDepartments failed on', url, '->', e?.message || e); }
+  }
+  return [];
 }
 
 export async function getUsers(params = {}) {
@@ -636,186 +636,51 @@ export async function getDepartmentSchedules() {
     throw lastErr || new Error('Failed to load department schedules');
 }
 
-// ----------------- POST Attendance (HARDENED) -----------------
-export async function postLog(payload) {
-    // 1) Derive core fields
-    const derivedUserId =
-        (payload?.userId != null ? Number(payload.userId) : undefined) ??
-        (payload?.user?.userId != null ? Number(payload.user.userId) : undefined) ??
-        (payload?.user?.id != null ? Number(payload.user.id) : undefined) ??
-        (payload?.id != null ? Number(payload.id) : undefined);
-
-    if (!Number.isFinite(derivedUserId)) {
-        throw new Error('A valid numeric userId is required to create an attendance log.');
-    }
-
-    const actionEnum = normalizeAction(payload?.action || payload?.type || 'TIME_IN');
-    const whenIso = toIsoNoMillis(
-        payload?.timeIn || payload?.timeOut || payload?.lunchStart || payload?.lunchEnd ||
-        payload?.breakStart || payload?.breakEnd || payload?.time || payload?.timestamp
-    );
-    const logDate = String(payload?.logDate || whenIso.slice(0, 10));
-
-    // Validate user
-    const confirmedUser = await getUserById(derivedUserId, { noMock: true });
-    if (!confirmedUser) {
-        const err = new Error(`User #${derivedUserId} not found on server. Please verify the ID or register the user.`);
-        err.code = 'USER_NOT_FOUND';
-        throw err;
-    }
-
-    // Department
-    let derivedDeptId =
-        (payload?.departmentId != null ? Number(payload.departmentId) : undefined) ??
-        (payload?.department?.departmentId != null ? Number(payload.department.departmentId) : undefined) ??
-        (payload?.user?.departmentId != null ? Number(payload.user.departmentId) : undefined) ??
-        (payload?.user?.department?.departmentId != null ? Number(payload.user.department.departmentId) : undefined);
-
-    if (derivedDeptId == null) {
-        try {
-            const r = await resolveDepartmentForUser(derivedUserId);
-            if (r?.departmentId != null) derivedDeptId = Number(r.departmentId);
-        } catch (_) {}
-    }
-
-    const serverPayload = {
-        userId: derivedUserId,
-        departmentId: derivedDeptId,
-        logDate,
-        status: statusToCode(normalizeStatus(payload?.status ?? payload?.action)),
-        createdAt: getCurrentDateTime(),
-        updatedAt: getCurrentDateTime(),
-        action: actionEnum,
-        time: whenIso,
-        type: payload?.type || undefined,
-    };
-    const timeField = actionToField(actionEnum);
-    serverPayload[timeField] = whenIso;
-
-    // 2) Idempotent update if exists
-    try {
-        const existing = await findExistingLog(serverPayload.userId, logDate);
-        if (existing && (existing.logId || existing.id)) {
-            const id = existing.logId ?? existing.id;
-            const patch = {
-                [timeField]: whenIso,
-                action: actionEnum,
-                status: serverPayload.status,
-                createdAt: existing.createdAt ?? existing.created_at,
-                updatedAt: getCurrentDateTime(),
-                userId: serverPayload.userId,
-                logDate,
-                departmentId: serverPayload.departmentId,
-            };
-            const updated = await updateLogById(id, patch);
-            if (updated != null) return updated;
-        } else if (existing) {
-            const patch = {
-                [timeField]: whenIso,
-                action: actionEnum,
-                status: serverPayload.status,
-                createdAt: existing.createdAt ?? existing.created_at,
-                userId: serverPayload.userId,
-                logDate,
-                departmentId: serverPayload.departmentId,
-            };
-            const updated = await updateLogByComposite(serverPayload.userId, logDate, patch);
-            if (updated != null) return updated;
-        }
-    } catch (_) {}
-
-    // 3) Create (Directus) — build and FORCE required snake_case keys
-    let lastErr;
-    try {
-        const dirData = await mapAttendanceToDirectus(
-            { ...serverPayload }, { actionEnum, whenIso, logDate }
-        ).build();
-
-        // Safety: enforce required keys even if inference failed
-        dirData.user_id = Number(serverPayload.userId);
-        dirData.log_date = String(logDate).slice(0, 10);
-        if (serverPayload.departmentId != null) dirData.department_id = Number(serverPayload.departmentId);
-
-        // Ensure the correct time field key exists
-        try {
-            const fmap = await inferAttendanceFieldMap();
-            const tk = fmap?.timeKeys?.[actionEnum];
-            if (tk && !dirData[tk] && whenIso) dirData[tk] = whenIso;
-        } catch (_) {}
-
-        // >>> QUICK DEBUG: print exactly what will be sent to Directus
-        console.debug('[API] POST /items/attendance_log payload:', dirData);
-
-        return await http('/items/attendance_log', {
-            method: 'POST',
-            body: JSON.stringify(dirData),
-        });
-    } catch (e) { lastErr = e; }
-
-    // 4) Absolute fallback (if you enable it later) with debug as well
-    // (Disabled by default due to CORS; keep here for reference)
-    /*
-    try {
-      const abs = 'http://100.119.3.44:8055/items/attendance_log';
-      const dirData = await mapAttendanceToDirectus({ ...serverPayload }, { actionEnum, whenIso, logDate }).build();
-      dirData.user_id = Number(serverPayload.userId);
-      dirData.log_date = String(logDate).slice(0, 10);
-      if (serverPayload.departmentId != null) dirData.department_id = Number(serverPayload.departmentId);
-      const fmap = await inferAttendanceFieldMap();
-      const tk = fmap?.timeKeys?.[actionEnum];
-      if (tk && !dirData[tk] && whenIso) dirData[tk] = whenIso;
-
-      // >>> QUICK DEBUG for absolute:
-      console.debug('[API] POST (ABS) /items/attendance_log payload:', { data: dirData });
-
-      const res = await fetch(abs, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ data: dirData }),
-      });
-      if (res?.ok) {
-        const ct = res.headers.get('content-type') || '';
-        return ct.includes('application/json') ? res.json() : null;
-      } else {
-        const txt = await res.text().catch(() => '');
-        if (String(txt).toLowerCase().includes('foreign key constraint')) {
-          const err = new Error(`User #${serverPayload.userId} not found on server (FK violation). Please verify the ID or register the user.`);
-          err.code = 'FK_USER';
-          throw err;
-        } else if (isDuplicateErrorText(txt)) {
-          const existing = await findExistingLog(serverPayload.userId, logDate);
-          const basePatch = {
-            [timeField]: whenIso, action: actionEnum, status: serverPayload.status,
-            createdAt: existing?.createdAt ?? existing?.created_at, userId: serverPayload.userId, logDate,
-          };
-          if (existing && (existing.logId || existing.id)) {
-            const id = existing.logId ?? existing.id;
-            const updated = await updateLogById(id, basePatch);
-            if (updated != null) return updated;
-          } else {
-            const updated = await updateLogByComposite(serverPayload.userId, logDate, basePatch);
-            if (updated != null) return updated;
-          }
-          throw new Error('Existing log updated instead of creating a duplicate.');
-        } else {
-          throw new Error(`${res.status} ${res.statusText}: ${txt}`);
-        }
-      }
-    } catch (e) { lastErr = e; }
-    */
-
-    throw lastErr || new Error('Failed to POST attendance log');
-}
-
-// Convenience exports for check-then-update flow
+/**
+ * Get existing attendance log for a user and date (Supabase version)
+ */
 export async function getExistingAttendanceLog(userId, logDate) {
-  if (userId == null) return null;
-  const dateStr = String(logDate || nowIsoNoMillis()).slice(0,10);
-  return await findExistingLog(userId, dateStr);
+  if (!userId) return null;
+  const dateStr = String(logDate).slice(0, 10);
+  try {
+    const { data, error } = await supabase
+      .from('attendance_log')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('log_date', dateStr)
+      .limit(1)
+      .single();
+    if (error) {
+      // If not found, Supabase returns error, but that's not a real error
+      if (error.code === 'PGRST116') return null;
+      console.error('Error fetching existing attendance log:', error.message);
+      return null;
+    }
+    return data;
+  } catch (err) {
+    console.error('Request failed:', err);
+    return null;
+  }
 }
 
-export async function updateLog(id, data) {
-  if (id == null) throw new Error('log id required');
-  return await updateLogById(id, data || {});
+/**
+ * Update an attendance log by id (Supabase version)
+ */
+export async function updateLog(id, patch) {
+  if (!id) return null;
+  try {
+    const { data, error } = await supabase
+      .from('attendance_log')
+      .update(patch)
+      .eq('id', id)
+      .single();
+    if (error) {
+      console.error('Error updating attendance log:', error.message);
+      return null;
+    }
+    return data;
+  } catch (err) {
+    console.error('Request failed:', err);
+    return null;
+  }
 }
-
-// ======================= end api.js =======================
