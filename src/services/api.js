@@ -461,3 +461,61 @@ export async function resolveDepartmentForUser(userId) {
     if (department.error || !department.data) return null;
     return department.data;
 }
+
+/**
+ * Gets all attendance logs for a specific user for the current day.
+ */
+export async function getLogsForUserToday(userId) {
+  try {
+    // Get today's date at midnight
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    // Get tomorrow's date at midnight
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const { data, error } = await supabase
+      .from('attendance_log')
+      .select('*')
+      .eq('user_id', userId)
+      .gte('timestamp', today.toISOString())
+      .lt('timestamp', tomorrow.toISOString())
+      .order('timestamp', { ascending: true });
+    if (error) {
+      console.error('Error fetching logs for user today:', error.message);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error('Request failed:', err);
+    return [];
+  }
+}
+
+/**
+ * Creates a new attendance log entry.
+ */
+export async function createLog(logData) {
+  try {
+    const { data, error } = await supabase
+      .from('attendance_log')
+      .insert([
+        {
+          user_id: logData.user_id,
+          action: logData.action,
+          timestamp: logData.timestamp || new Date().toISOString(),
+          department_id: logData.department_id,
+          // Add any other columns you need
+        },
+      ])
+      .select()
+      .single();
+    if (error) {
+      console.error('Error creating log:', error.message);
+      return null;
+    }
+    return data;
+  } catch (err) {
+    console.error('Request failed:', err);
+    return null;
+  }
+}

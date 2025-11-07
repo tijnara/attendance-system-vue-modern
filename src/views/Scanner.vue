@@ -178,20 +178,14 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
+import { getUserByRfid } from '../services/usersAPI.js'
+import { getLogsForUserToday, createLog, getLogs } from '../services/api.js'
 import StatusToast from '../components/StatusToast.vue'
-import {
-  postLog,
-  findUserByRfidOrBarcode,
-  getLogs,
-  resolveDepartmentForUser,
-  getUserById,
-  normalizeStatus,
-  getDepartmentSchedules,
-  getDepartments,
-  getExistingAttendanceLog,
-  updateLog
-} from '../services/api.js'
-import { DISABLE_EMPLOYEE_NO, DISABLE_RFID } from '../config.js'
+
+const busy = ref(false)
+const statusMessage = ref('')
+const isError = ref(false)
+const toastKey = ref(0)
 
 /** ---------------- Form / State ---------------- */
 const form = ref({
@@ -206,7 +200,6 @@ const form = ref({
 const maskedRfid = computed(() => '#'.repeat(String(form.value.rfide || '').length))
 
 const rfidInput = ref(null)
-const busy = ref(false)
 const lastLocalLogs = ref([])
 const toast = ref({ ok: false, msg: '' })
 const adminRows = ref([])
