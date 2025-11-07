@@ -322,92 +322,47 @@ export async function getDepartments(params = {}) {
 }
 
 export async function getUsers(params = {}) {
-    const qs = new URLSearchParams(params || {}).toString();
-    const candidates = [ qs ? `/items/user?${qs}` : '/items/user' ];
-    for (const url of candidates) {
-        console.log('[API] GET', url);
-        try {
-            const res = await http(url);
-            if (Array.isArray(res)) return res;
-            if (Array.isArray(res?.data)) return res.data;
-            if (Array.isArray(res?.content)) return res.content;
-            if (Array.isArray(res?.items)) return res.items;
-            if (Array.isArray(res?.records)) return res.records;
-            if (res && typeof res === 'object') {
-                if (res.data && !Array.isArray(res.data)) return [res.data];
-                return [res];
-            }
+    try {
+        let query = supabase.from('user').select('*');
+        if (params && typeof params === 'object') {
+            Object.entries(params).forEach(([key, value]) => {
+                if (value !== undefined && value !== null && value !== '') {
+                    query = query.eq(key, value);
+                }
+            });
+        }
+        const { data, error } = await query;
+        if (error) {
+            console.error('[API] getUsers failed (Supabase):', error.message);
             return [];
-        } catch (e) { console.warn('[API] getUsers failed on', url, '->', e?.message || e); }
+        }
+        return data || [];
+    } catch (err) {
+        console.error('[API] getUsers failed (Supabase):', err?.message || err);
+        return [];
     }
-    console.warn('[API] getUsers: all attempts failed, returning []');
-    return [];
 }
 
 export async function getUserById(id, opts = {}) {
     if (!id && id !== 0) throw new Error('User ID required');
     const sid = String(id);
-    const noMock = opts.noMock === true;
-    console.log('[API] GET user by id ->', id, noMock ? '(noMock)' : '');
-
-    const pickMatch = (data) => {
-        if (!data) return null;
-        const idOf = (u) => String(u?.userId ?? u?.user_id ?? u?.id);
-        if (Array.isArray(data)) return data.find(u => idOf(u) === sid) || null;
-        if (data.data && Array.isArray(data.data)) return data.data.find(u => idOf(u) === sid) || null;
-        if (data.data && !Array.isArray(data.data) && typeof data.data === 'object') return (idOf(data.data) === sid) ? data.data : null;
-        if (data.content && Array.isArray(data.content)) return data.content.find(u => idOf(u) === sid) || null;
-        if (data.userId || data.user_id || data.id) return (idOf(data) === sid) ? data : null;
+    try {
+        const { data, error } = await supabase
+            .from('user')
+            .select('*')
+            .or(`user_id.eq.${sid},id.eq.${sid}`)
+            .limit(1)
+            .single();
+        if (error) {
+            if (error.code === 'PGRST116') return null; // Not found
+            console.error('[API] getUserById failed (Supabase):', error.message);
+            return null;
+        }
+        return data;
+    } catch (err) {
+        console.error('[API] getUserById failed (Supabase):', err?.message || err);
         return null;
-    };
-
-    try {
-        const res = await http(`/items/user?userId=${encodeURIComponent(id)}`);
-        const match = pickMatch(res);
-        if (match) return match;
-    } catch (e) { console.warn('[API] /items/user?userId= not available or no match:', e.message); }
-
-    try {
-        const res = await http(`/items/user?id=${encodeURIComponent(id)}`);
-        const match = pickMatch(res);
-        if (match) return match;
-    } catch (e) { console.warn('[API] /items/user?id= not available or no match:', e.message); }
-
-    try {
-        const res = await http('/items/user');
-        const match = pickMatch(res);
-        if (match) return match;
-    } catch (e) { console.warn('[API] /items/user full list fetch failed:', e.message); }
-
-    try {
-        const res = await http(`/items/user/${encodeURIComponent(id)}`);
-        const match = pickMatch(res);
-        if (match) return match;
-    } catch (e) { console.warn('[API] /items/user/:id failed:', e.message); }
-
-    const directusAttempts = [
-        `/items/user/${encodeURIComponent(id)}`,
-        `/items/user?filter[user_id][_eq]=${encodeURIComponent(id)}&limit=1`,
-        `/items/user?filter[id][_eq]=${encodeURIComponent(id)}&limit=1`,
-        `/items/user?user_id=${encodeURIComponent(id)}`,
-        `/items/user?id=${encodeURIComponent(id)}`,
-    ];
-    for (const path of directusAttempts) {
-        try {
-            const res = await http(path);
-            const match = pickMatch(res);
-            if (match) return match;
-        } catch (_) {}
     }
-
-    if (!noMock) {
-        try {
-            const res = await getUsers();
-            const match = pickMatch(res);
-            if (match) return match;
-        } catch (_) {}
-    }
-    return null;
 }
 
 export async function resolveDepartmentForUser(userId) {
@@ -624,16 +579,19 @@ export async function deleteSchedule(id) {
 }
 
 export async function getDepartmentSchedules() {
-    const candidates = ['/items/department_schedule', '/api/departments/schedules', '/api/schedules', '/api/department-schedules', '/api/schedule'];
-    let lastErr;
-    for (const url of candidates) {
-        try {
-            const res = await http(url);
-            const list = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : (res?.content || []));
-            return list.map(normalizeSchedule);
-        } catch (e) { lastErr = e; console.warn('[API] getDepartmentSchedules failed on', url, '->', e?.message || e); }
+    try {
+        const { data, error } = await supabase
+            .from('department_schedule')
+            .select('*');
+        if (error) {
+            console.error('[API] getDepartmentSchedules failed (Supabase):', error.message);
+            throw error;
+        }
+        return Array.isArray(data) ? data.map(normalizeSchedule) : [];
+    } catch (err) {
+        console.error('[API] getDepartmentSchedules failed (Supabase):', err?.message || err);
+        throw err;
     }
-    throw lastErr || new Error('Failed to load department schedules');
 }
 
 /**
