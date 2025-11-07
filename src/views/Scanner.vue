@@ -97,19 +97,6 @@
         </div>
 
         <div class="mt-4 flex items-center gap-2">
-          <button
-              type="button"
-              class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 text-white px-4 py-2 shadow hover:bg-indigo-700 disabled:opacity-60"
-              :disabled="busy"
-              @click="simulateFingerprint"
-          >
-            <span class="flex items-center gap-1">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4"><path fill="currentColor" d="M20 4H4a2 2 0 0 0-2 2v2h20V6a2 2 0 0 0-2-2M2 18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V10H2z"/></svg>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4"><path fill="currentColor" d="M12 1a7 7 0 0 0-7 7v3a1 1 0 1 0 2 0V8a5 5 0 0 1 10 0v3a7 7 0 0 1-7 7a1 1 0 0 0 0 2a9 9 0 0 0 9-9V8a7 7 0 0 0-7-7"/></svg>
-            </span>
-            <span v-if="!busy">Scan</span>
-            <span v-else>Saving…</span>
-          </button>
           <span v-if="showLateLabel" class="ml-4 flex items-center text-red-600 font-bold text-lg">
             <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/><path stroke="currentColor" stroke-width="2" d="M12 8v4m0 4h.01"/></svg>
             Late
@@ -178,14 +165,10 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
-import { getUserByRfid } from '../services/usersAPI.js'
-import { getLogsForUserToday, createLog, getLogs } from '../services/api.js'
+import { getLogs } from '../services/api.js'
 import StatusToast from '../components/StatusToast.vue'
 
 const busy = ref(false)
-const statusMessage = ref('')
-const isError = ref(false)
-const toastKey = ref(0)
 
 /** ---------------- Form / State ---------------- */
 const form = ref({
@@ -437,14 +420,6 @@ function hms12(s){
   const sec = ss != null ? `:${ss}` : ''
   return `${hh}:${mm}${sec} ${ap}`
 }
-async function verifyUserExists(id) {
-  try {
-    const user = await getUserById(id, { noMock: true })
-    return !!(user && (user.userId != null || user.id != null || user.user_id != null))
-  } catch {
-    return false
-  }
-}
 const ACTION_SEQUENCE = ['TIME_IN', 'LUNCH_START', 'LUNCH_END', 'BREAK_START', 'BREAK_END', 'TIME_OUT']
 
 async function getTodayLogForUser(userId) {
@@ -494,22 +469,8 @@ async function determineNextAction(userId) {
   return ACTION_SEQUENCE[count] || null
 }
 
-/** ---------------- Cooldown (disabled toggle available) ---------------- */
-const COOLDOWN_MINUTES = 15
-const COOLDOWN_STORAGE_KEY = 'attnCooldowns'
-const COOLDOWN_DISABLED = true // Disable all cooldown/time limit logic
-function readCooldowns() { return {} }
-function writeCooldowns(map) { /* no-op */ }
-function getCooldownUntil(userId) { return 0 }
-function setCooldown(userId, minutes = COOLDOWN_MINUTES) { /* no-op */ }
-function getCooldownLeftSec(userId) { return 0 }
-function startCooldownFor(userId, minutes = COOLDOWN_MINUTES) { /* no-op */ }
-function clearCooldownFor(userId) { /* no-op */ }
-async function resetCooldownIfNoLogs(userId) { /* no-op */ }
-async function enforceLocalCooldownOrThrow(userId) { /* no-op */ }
-async function enforceServerCooldownOrThrow(userId) { /* no-op */ }
-
 /** ---------------- Form actions ---------------- */
+let lastSubmit = { key: '', ts: 0 }
 async function commit({ action, departmentId, manualUserId, keyboard }) {
   if (busy.value) return
   busy.value = true
@@ -597,72 +558,6 @@ async function commit({ action, departmentId, manualUserId, keyboard }) {
   }
 }
 
-async function simulateFingerprint() {
-  if (busy.value) return;
-  busy.value = true;
-  let success = false;
-  try {
-    const userId = Number(form.value.manualUserId);
-    if (!userId) {
-      note(false, 'Please enter a valid Employee No.');
-      return;
-    }
-    const nextAction = await determineNextAction(userId);
-    if (!nextAction) {
-      note(false, 'All required scans for today are already recorded. Please do not scan again.');
-      return;
-    }
-    let resolvedDeptId = form.value.departmentId;
-    let resolvedDeptName;
-    try {
-      const info = await resolveDepartmentForUser(userId);
-      if (info) {
-        resolvedDeptId = resolvedDeptId ?? info.departmentId;
-        resolvedDeptName = info.departmentName;
-      }
-    } catch {}
-    form.value.manualUserId = userId;
-    if (resolvedDeptId != null) form.value.departmentId = Number(resolvedDeptId);
-    const workStart = getWorkStartForDepartment(resolvedDeptId);
-    const payload = buildPayload({ userId, departmentId: resolvedDeptId, departmentName: resolvedDeptName, type: 'FINGERPRINT', action: nextAction, raw: 'SIMULATED_FP_4500', workStart });
-    console.debug('[Scanner] simulateFingerprint payload ->', payload);
-    const existing = await getExistingAttendanceLog(userId, payload.logDate || payload.log_date);
-    let res;
-    if (existing && (existing.logId || existing.id)) {
-      const id = existing.logId || existing.id;
-      const fieldMap = { 'TIME_IN':'timeIn','TIME_OUT':'timeOut','LUNCH_START':'lunchStart','LUNCH_END':'lunchEnd','BREAK_START':'breakStart','BREAK_END':'breakEnd' };
-      const fieldName = fieldMap[nextAction] || 'timeIn';
-      const patch = { [fieldName]: payload[fieldName], userId, logDate: payload.logDate || payload.log_date, departmentId: resolvedDeptId };
-      res = await updateLog(id, patch);
-    } else {
-      res = await postLog(payload);
-    }
-    pushLocal({ time: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila', hour12: true }), userId, type: 'FINGERPRINT', action: nextAction, departmentId: resolvedDeptId, departmentName: resolvedDeptName });
-    if (payload.status === 'Late') {
-      const scanName = fullName.value || (selectedUser.value && (selectedUser.value.fullName || selectedUser.value.name)) || `#${userId}`;
-      note(false, `${scanName},\nLate`, 'late');
-      showLateLabel.value = true;
-      setTimeout(() => { showLateLabel.value = false }, 2000);
-    } else {
-      note(true, `Fingerprint ${titleCaseFromEnum(nextAction)} logged for #${userId}`);
-      showLateLabel.value = false;
-    }
-    success = true;
-    console.log('[Scanner] simulateFingerprint result ->', res);
-    form.value.action = nextAction;
-    loadAdminLogs();
-    const scanDept = resolvedDeptName || getDeptName(resolvedDeptId);
-    const scanName = fullName.value || (selectedUser.value && (selectedUser.value.fullName || selectedUser.value.name)) || `#${userId}`;
-    lastScan.value = { name: String(scanName), department: String(scanDept || ''), status: payload.status };
-  } catch (e) {
-    console.error('[Scanner] simulateFingerprint error:', e);
-    note(false, e?.message || 'Failed to log fingerprint.');
-  } finally {
-    scheduleClearFields(success ? 0 : 2000);
-    busy.value = false;
-  }
-}
-
 // Place buildPayload before simulateFingerprint and commit so it is always defined before use
 function getWorkStartForDepartment(departmentId) {
   const sched = schedules.value.find(s => String(s.departmentId ?? s.department_id ?? s.id) === String(departmentId));
@@ -709,7 +604,7 @@ function buildPayload({ userId, departmentId, departmentName, type, action, raw,
     departmentName: departmentName || undefined,
     log_date: iso.slice(0, 10),
     ...timed,
-    type,           // FINGERPRINT | RFID
+    type,           // RFID only
     action: actionEnum,
     status: statusName,
     raw: raw || undefined
