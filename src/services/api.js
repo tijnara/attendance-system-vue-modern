@@ -1,6 +1,6 @@
 // ======================= api.js (updated) =======================
 
-import { supabase } from './supabase'
+import { supabase } from '../utils/supabase'
 
 // Dynamic API base resolution with robust fallbacks (mirrors login script behavior)
 const FALLBACKS = [import.meta.env.VITE_API_BASE_URL || 'http://100.119.3.44:8055/'];

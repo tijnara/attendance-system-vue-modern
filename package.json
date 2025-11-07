@@ -9,7 +9,7 @@
     "preview": "vite preview --host 0.0.0.0 --port 5000"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.80.0",
+    "@supabase/supabase-js": "^2.39.7",
     "vue": "^3.4.0",
     "vue-router": "^4.3.0"
   },

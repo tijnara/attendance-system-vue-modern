@@ -1,5 +1,5 @@
 // src/services/usersApi.js
-import { supabase } from './supabase'
+import { supabase } from '../utils/supabase'
 
 /**
  * Get user by RFID – rewritten for Supabase

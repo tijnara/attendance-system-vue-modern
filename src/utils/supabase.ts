@@ -1,13 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_KEY;
+const supabase = createClient(
+  'https://qqczvucpzbedcxjdxppo.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxY3p2dWNwemJlZGN4amR4cHBvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0ODUyMTMsImV4cCI6MjA3ODA2MTIxM30.Viqb7eUPHgQcR92ziNNJ7mYQW2pKNFN-DsdH8DAFbuI'
+);
 
-console.log('VITE_SUPABASE_URL:', supabaseUrl);
-console.log('VITE_SUPABASE_KEY:', supabaseKey ? `[${supabaseKey.length} chars] ${supabaseKey.slice(0,4)}...${supabaseKey.slice(-4)}` : 'undefined or empty');
-
-if (!supabaseKey) {
-  throw new Error('VITE_SUPABASE_KEY is missing or empty!');
-}
-
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export { supabase };
