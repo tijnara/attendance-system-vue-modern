@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-8">
     <!-- Top banner like screenshot -->
-    <div class="rounded-2xl p-5 md:p-6 border border-black/5 bg-gradient-to-r from-indigo-50 via-sky-50 to-fuchsia-50 shadow-sm">
+    <div class="rounded-2xl p-5 md:p-6 border border-black/5 shadow-sm" style="background: linear-gradient(90deg, #fffbe6 0%, #ffffff 100%);">
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 class="text-2xl md:text-3xl font-bold">Employee Time Tracking System</h1>
@@ -454,7 +454,7 @@ function toTs(v) {
   if (typeof v === 'number') return v
   const s = String(v)
   // if only time provided, prefix with today's date in Manila
-  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(s)) {
+  if (/^\d{1,2}:\d{2}(:\d{1,2})?$/.test(s)) {
     const date = manilaDateYMD()
     const iso = `${date}T${s.length === 5 ? s + ':00' : s}+08:00`
     return Date.parse(iso)

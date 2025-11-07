@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen font-sans bg-gradient-to-br from-indigo-100 via-white to-emerald-100 dark:from-neutral-950 dark:via-neutral-900 dark:to-neutral-800 text-neutral-900 dark:text-neutral-100">
+  <div class="min-h-screen font-sans text-neutral-900 dark:text-neutral-100">
     <NavBar />
     <main class="max-w-7xl mx-auto px-4 py-8">
       <ul>

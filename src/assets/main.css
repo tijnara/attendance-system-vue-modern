@@ -5,8 +5,8 @@
 :root { color-scheme: light; }
 html, body, #app {
   height: 100%;
-  /* White and gold gradient background */
-  background: linear-gradient(135deg, #fffbe6 0%, #ffd700 100%);
+  /* Smooth white to gold gradient background */
+  background: linear-gradient(135deg, #FFFFFF 0%, #fffbe6 40%, #ffd700 100%);
 }
 
 
