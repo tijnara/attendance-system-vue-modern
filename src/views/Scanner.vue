@@ -97,7 +97,7 @@
         </div>
 
         <div class="mt-4 flex items-center gap-2">
-          <span v-if="showLateLabel" class="ml-4 flex items-center text-red-600 font-bold text-lg">
+          <span v-if="showLateLabel" class="ml-4 flex items-center text-red-600 font-bold">
             <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/><path stroke="currentColor" stroke-width="2" d="M12 8v4m0 4h.01"/></svg>
             Late
           </span>
@@ -165,8 +165,19 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
-import { getLogs } from '../services/api.js'
+import {
+  getLogs,
+  getDepartmentSchedules,
+  getDepartments,
+  getUserById,
+  resolveDepartmentForUser,
+  findUserByRfidOrBarcode,
+  getExistingAttendanceLog,
+  updateLog,
+  postLog
+} from '../services/api.js'
 import StatusToast from '../components/StatusToast.vue'
+import { DISABLE_RFID, DISABLE_EMPLOYEE_NO } from '../config.js'
 
 const busy = ref(false)
 
@@ -365,13 +376,16 @@ const departmentNameDisplay = computed(() => {
   // Prioritize the name from the selected user object, as it may be nested.
   const nameFromUserObject = u?.departmentName ?? u?.department_name ?? u?.deptName ?? u?.dept_name ?? u?.department?.departmentName ?? u?.department?.department_name ?? u?.department?.deptName ?? u?.department?.dept_name ?? u?.department?.name ?? u?.department?.title;
   if (nameFromUserObject) {
+    console.log('[Scanner] departmentNameDisplay from user object:', nameFromUserObject)
     return nameFromUserObject;
   }
 
   // Fallback to looking up the ID in the general departments list.
   if (id != null) {
     const d = deptMap.value[String(id)];
-    return deptNameOf(d) || '—';
+    const deptName = deptNameOf(d) || '—';
+    console.log('[Scanner] departmentNameDisplay from deptMap:', id, deptName)
+    return deptName;
   }
 
   return '—'; // Default placeholder
@@ -397,6 +411,7 @@ async function loadDepartments() {
     const res = await getDepartments()
     const list = Array.isArray(res) ? res : (res?.content || [])
     departments.value = list
+    console.log('[Scanner] Loaded departments:', list)
   } catch {
     departments.value = []
   }
