@@ -47,6 +47,7 @@
                 class="w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400"
                 type="number"
                 v-model.number="form.manualUserId"
+                @keyup.enter="onManualScan"
                 placeholder="Employee number"
                 :disabled="DISABLE_EMPLOYEE_NO || busy"
             />
@@ -96,8 +97,18 @@
           </div>
         </div>
 
-        <div class="mt-4 flex items-center gap-2">
-          <span v-if="showLateLabel" class="ml-4 flex items-center text-red-600 font-bold">
+        <div class="mt-4 flex items-center gap-3">
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 text-white px-4 py-2 text-sm font-semibold shadow hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            @click="onManualScan"
+            :disabled="busy || !form.manualUserId"
+            title="Scan manually"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="currentColor"><path d="M4 6a2 2 0 0 1 2-2h4v2H6v4H4zm16 0v4h-2V6h-4V4h4a2 2 0 0 1 2 2M4 14h2v4h4v2H6a2 2 0 0 1-2-2zm16 0h-2v4h-4v2h4a2 2 0 0 0 2-2z"/></svg>
+            <span>Scan</span>
+          </button>
+          <span v-if="showLateLabel" class="ml-2 flex items-center text-red-600 font-bold">
             <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/><path stroke="currentColor" stroke-width="2" d="M12 8v4m0 4h.01"/></svg>
             Late
           </span>
@@ -129,8 +140,8 @@
                 </tr>
                 </thead>
                 <tbody>
-                <tr v-for="s in schedules" :key="s.scheduleId ?? s.departmentId" class="border-b border-black/5">
-                  <td class="py-1 px-2 whitespace-normal break-words align-top">{{ getDeptName(s.departmentId) }}</td>
+                <tr v-for="s in schedules" :key="s.scheduleId ?? (s.departmentId ?? s.department_id ?? s.deptId ?? s.dept_id ?? s.id)" class="border-b border-black/5">
+                  <td class="py-1 px-2 whitespace-normal break-words align-top">{{ getDeptName(s.departmentId ?? s.department_id ?? s.deptId ?? s.dept_id ?? s.id) }}</td>
                   <td class="py-1 px-2 whitespace-normal break-words align-top">{{ s.workingDays ?? '' }}</td>
                   <td class="py-1 px-2 whitespace-normal break-words align-top">{{ hms12(s.workStart) }}</td>
                   <td class="py-1 px-2 whitespace-normal break-words align-top">{{ hms12(s.workEnd) }}</td>
@@ -437,6 +448,35 @@ function hms12(s){
 }
 const ACTION_SEQUENCE = ['TIME_IN', 'LUNCH_START', 'LUNCH_END', 'BREAK_START', 'BREAK_END', 'TIME_OUT']
 
+function toTs(v) {
+  if (!v) return null
+  // accept ISO, 'YYYY-MM-DD', or time strings
+  if (typeof v === 'number') return v
+  const s = String(v)
+  // if only time provided, prefix with today's date in Manila
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(s)) {
+    const date = manilaDateYMD()
+    const iso = `${date}T${s.length === 5 ? s + ':00' : s}+08:00`
+    return Date.parse(iso)
+  }
+  // if only date
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return Date.parse(`${s}T00:00:00+08:00`)
+  // otherwise try native parse
+  const d = Date.parse(s)
+  return isNaN(d) ? null : d
+}
+function latestActionTime(row) {
+  if (!row) return null
+  const fields = ['timeOut','breakEnd','breakStart','lunchEnd','lunchStart','timeIn']
+  for (const f of fields) {
+    if (row[f]) {
+      const ts = toTs(row[f])
+      if (ts) return ts
+    }
+  }
+  return null
+}
+
 async function getTodayLogForUser(userId) {
   const dateStr = manilaDateYMD()
   try {
@@ -485,6 +525,26 @@ async function determineNextAction(userId) {
 }
 
 /** ---------------- Form actions ---------------- */
+const COOLDOWN_MINUTES = 5
+const cooldownTimers = new Map()
+function startCooldownFor(userId, minutes = COOLDOWN_MINUTES) {
+  try {
+    const ms = Math.max(0, Number(minutes) || COOLDOWN_MINUTES) * 60 * 1000
+    const prev = cooldownTimers.get(userId)
+    if (prev) clearTimeout(prev)
+    const t = setTimeout(() => cooldownTimers.delete(userId), ms)
+    cooldownTimers.set(userId, t)
+  } catch {}
+}
+
+async function resolveUser({ manualUserId, keyboard }) {
+  const userId = Number(manualUserId ?? keyboard) || null
+  if (!userId) throw new Error('Please enter an Employee No.')
+  const rfidStr = String(form.value.rfide || '').trim()
+  const isRfid = !!rfidStr
+  return { userId, type: isRfid ? 'RFID' : 'Manual', raw: isRfid ? { rfide: rfidStr } : null }
+}
+
 let lastSubmit = { key: '', ts: 0 }
 async function commit({ action, departmentId, manualUserId, keyboard }) {
   if (busy.value) return
@@ -625,4 +685,12 @@ function buildPayload({ userId, departmentId, departmentName, type, action, raw,
     raw: raw || undefined
   };
 }
+function onManualScan() {
+  if (busy.value) return
+  const id = Number(form.value.manualUserId)
+  if (!id) { note(false, 'Please enter an Employee No.') ; return }
+  // do not require department to proceed; backend/resolveDepartment will fill if missing
+  commit({ departmentId: form.value.departmentId, manualUserId: id }).catch(() => {})
+}
+
 </script>
