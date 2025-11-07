@@ -3,7 +3,11 @@
 @tailwind utilities;
 
 :root { color-scheme: light; }
-html, body, #app { height: 100%; }
+html, body, #app {
+  height: 100%;
+  /* White and gold gradient background */
+  background: linear-gradient(135deg, #fffbe6 0%, #ffd700 100%);
+}
 
 
 /* Force light color scheme for built-in UI elements */
