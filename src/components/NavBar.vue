@@ -5,12 +5,19 @@
       <nav class="flex items-center gap-4 text-sm flex-wrap w-full sm:w-auto">
         <RouterLink class="hover:underline" to="/">Scanner</RouterLink>
         <RouterLink class="hover:underline" to="/admin/logs">Admin Logs</RouterLink>
+        <button class="hover:underline bg-transparent border-0 cursor-pointer text-inherit" @click="showLogin = true">Login</button>
       </nav>
       <div class="hidden sm:block sm:ml-auto text-sm opacity-70"><Clock/></div>
     </div>
+    <Teleport to="body">
+      <LoginModal v-if="showLogin" @close="showLogin = false" />
+    </Teleport>
   </header>
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import Clock from './Clock.vue'
+import LoginModal from '../views/Login.vue'
+const showLogin = ref(false)
 </script>

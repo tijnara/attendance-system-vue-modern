@@ -6,6 +6,7 @@ dist/
 
 # Local env files
 .env
+.env.local
 
 # Log files
 npm-debug.log*
@@ -29,4 +30,3 @@ coverage/
 
 # Optional: misc
 *.local
-
