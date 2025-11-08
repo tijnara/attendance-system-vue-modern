@@ -1,23 +1,19 @@
 # Attendance System (Vue 3 + Tailwind)
 
-Modern, clean UI for fingerprint (stub) and RFID attendance. Proxied to `http://goatedcodoer:8080`.
+Modern, clean UI for RFID attendance. Now powered by Supabase.
 
-## Dev (100.119.3.44)
+## Dev
 ```bash
 npm i
 npm run dev -- --host 0.0.0.0 --port 5173
-# http://100.119.3.44:5173
+# Example: http://localhost:5173
 ```
 
 ## Build + Serve
 ```bash
 npm run build
-npm run preview  # http://100.119.3.44:5000
+npm run preview  # Example: http://localhost:5000
 ```
-
-## Nginx
-See sample config in the previous message; ensure `/api` is proxied to `http://goatedcodoer:8080`.
-
 
 ## Feature Flags
 To disable specific input fields in the Scanner view without code changes elsewhere, edit the booleans in `src/config.js`:
@@ -30,3 +26,7 @@ export const DISABLE_RFID = false         // set to true to disable the RFID inp
 
 - When `DISABLE_EMPLOYEE_NO` is true, the Employee No field becomes disabled.
 - When `DISABLE_RFID` is true, the RFID field is disabled and the app will not auto-focus or submit via that field.
+
+---
+
+All legacy references to `100.119.3.44` and Directus have been removed. The system now uses Supabase for all backend operations.
