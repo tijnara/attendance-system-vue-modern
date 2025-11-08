@@ -12,13 +12,10 @@ import { supabase } from '../utils/supabase'
  */
 export async function listDepartmentsWithSchedules() {
   try {
-    // This performs a "left join" to get the schedule for each department
+    // Use explicit join to resolve relationship ambiguity
     const { data, error } = await supabase
       .from('department')
-      .select(`
-        *,
-        department_schedule(*)
-      `)
+      .select(`*, department_schedule:department_schedule!department_id(*)`)
       .order('name', { ascending: true })
 
     if (error) {
@@ -107,4 +104,3 @@ export async function updateDepartmentSchedule(id, schedulePatch) {
     return null
   }
 }
-
