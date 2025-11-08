@@ -1,32 +1,27 @@
-# Node modules
+# Node
 node_modules/
 
-# Build output
-dist/
+# Build
+/dist
+/.vite
 
-# Local env files
+# Env
 .env
 .env.local
 
-# Log files
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# Vercel
+.vercel
 
-# IDE files
-.idea/
-.vscode/
+# IDE
+.idea
+*.iml
 
-# System files
+# Misc
 .DS_Store
-Thumbs.db
+*.log
 
-# Optional: OS generated files
-*.swp
-*.swo
-
-# Optional: coverage reports
+# Test
 coverage/
 
-# Optional: misc
-*.local
+# OS
+Thumbs.db
