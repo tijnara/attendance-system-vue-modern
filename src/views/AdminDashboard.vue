@@ -1,6 +1,9 @@
 <template>
   <div class="p-8 max-w-7xl mx-auto space-y-8">
-    <h1 class="text-4xl font-bold mb-8">Admin Dashboard</h1>
+    <div class="flex justify-between items-center mb-8">
+      <h1 class="text-4xl font-bold">Admin Dashboard</h1>
+      <button @click="logOut" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition">Log Out</button>
+    </div>
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
       <div class="space-y-8">
         <div class="bg-white dark:bg-neutral-800 p-6 rounded-lg shadow-md">
@@ -71,8 +74,8 @@
                 >
                   <span class="font-semibold">{{ dept.name }}</span>
                   <span class="text-sm text-neutral-600 dark:text-neutral-400">
-                    <span v-if="dept.department_schedule && dept.department_schedule[0]">
-                      {{ dept.department_schedule[0].workStart }} - {{ dept.department_schedule[0].workEnd }}
+                    <span v-if="dept.department_schedule">
+                     - {{ dept.department_schedule.workStart }} - {{ dept.department_schedule.workEnd }}
                     </span>
                     <span v-else class="text-red-500">No schedule set</span>
                   </span>
@@ -182,18 +185,12 @@
                 <tr class="border-b dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700">
                   <td class="p-2">{{ dept.id }}</td>
                   <td class="p-2">{{ dept.name }}</td>
+                  <td class="p-2">{{ dept.department_schedule ? dept.department_schedule.id : '-' }}</td>
+                  <td class="p-2">{{ dept.department_schedule ? dept.department_schedule.workStart : '-' }}</td>
+                  <td class="p-2">{{ dept.department_schedule ? dept.department_schedule.workEnd : '-' }}</td>
                   <td class="p-2">
-                    {{ dept.department_schedule && dept.department_schedule.length > 0 ? dept.department_schedule[0].id : '-' }}
-                  </td>
-                  <td class="p-2">
-                    {{ dept.department_schedule && dept.department_schedule.length > 0 ? dept.department_schedule[0].workStart : '-' }}
-                  </td>
-                  <td class="p-2">
-                    {{ dept.department_schedule && dept.department_schedule.length > 0 ? dept.department_schedule[0].workEnd : '-' }}
-                  </td>
-                  <td class="p-2">
-                    <span :class="dept.department_schedule && dept.department_schedule.length > 0 ? 'text-green-500' : 'text-red-500'">
-                      {{ dept.department_schedule && dept.department_schedule.length > 0 ? 'Yes' : 'No' }}
+                    <span :class="dept.department_schedule ? 'text-green-500' : 'text-red-500'">
+                      {{ dept.department_schedule ? 'Yes' : 'No' }}
                     </span>
                   </td>
                 </tr>
@@ -219,16 +216,16 @@
             </thead>
             <tbody>
               <template v-for="dept in departments" :key="dept.id">
-                <tr v-if="dept.department_schedule && dept.department_schedule[0]" class="border-b dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700">
+                <tr v-if="dept.department_schedule" class="border-b dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700">
                   <td class="p-2 font-medium">{{ dept.name }}</td>
-                  <td class="p-2">{{ dept.department_schedule[0].workStart }} - {{ dept.department_schedule[0].workEnd }}</td>
-                  <td class="p-2">{{ dept.department_schedule[0].lunchStart }} - {{ dept.department_schedule[0].lunchEnd }}</td>
-                  <td class="p-2">{{ dept.department_schedule[0].breakStart }} - {{ dept.department_schedule[0].breakEnd }}</td>
-                  <td class="p-2">{{ dept.department_schedule[0].workingDays }}</td>
-                  <td class="p-2">{{ dept.department_schedule[0].workdaysNote }}</td>
+                  <td class="p-2">{{ dept.department_schedule.workStart }} - {{ dept.department_schedule.workEnd }}</td>
+                  <td class="p-2">{{ dept.department_schedule.lunchStart }} - {{ dept.department_schedule.lunchEnd }}</td>
+                  <td class="p-2">{{ dept.department_schedule.breakStart }} - {{ dept.department_schedule.breakEnd }}</td>
+                  <td class="p-2">{{ dept.department_schedule.workingDays }}</td>
+                  <td class="p-2">{{ dept.department_schedule.workdaysNote }}</td>
                 </tr>
               </template>
-              <tr v-if="departments.every(d => !(d.department_schedule && d.department_schedule[0]))">
+              <tr v-if="departments.every(d => !d.department_schedule)">
                 <td colspan="6" class="p-4 text-center text-neutral-500">No schedules created yet.</td>
               </tr>
             </tbody>
@@ -241,6 +238,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { createUser, listUsers } from '../services/usersAPI'
 import {
   listDepartmentsWithSchedules,
@@ -248,6 +246,7 @@ import {
   createDepartmentSchedule,
   updateDepartmentSchedule
 } from '../services/adminDataAPI'
+import { supabase } from '../utils/supabase'
 
 // --- State ---
 const newUser = ref({
@@ -279,6 +278,8 @@ const scheduleToEdit = ref({ ...defaultSchedule })
 // --- State for Lists ---
 const users = ref([])
 const departments = ref([])
+
+const router = useRouter()
 
 onMounted(() => {
   loadDepartmentsWithSchedules()
@@ -327,7 +328,7 @@ async function handleAddDepartment() {
 function openScheduleEditor(department) {
   scheduleToEdit.value.department_name = department.name
   scheduleToEdit.value.department_id = department.id
-  const existingSchedule = department.department_schedule[0]
+  const existingSchedule = department.department_schedule
   if (existingSchedule) {
     scheduleToEdit.value.id = existingSchedule.id
     scheduleToEdit.value.workingDays = existingSchedule.workingDays
@@ -393,5 +394,11 @@ async function handleSaveSchedule() {
   } catch (err) {
     alert(`Error saving schedule: ${err.message}`);
   }
+}
+
+function logOut() {
+  supabase.auth.signOut().then(() => {
+    router.push('/login')
+  })
 }
 </script>
