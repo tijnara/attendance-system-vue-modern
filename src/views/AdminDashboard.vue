@@ -71,7 +71,7 @@
                 >
                   <span class="font-semibold">{{ dept.name }}</span>
                   <span class="text-sm text-neutral-600 dark:text-neutral-400">
-                    <span v-if="dept.department_schedule[0]">
+                    <span v-if="dept.department_schedule && dept.department_schedule[0]">
                       {{ dept.department_schedule[0].workStart }} - {{ dept.department_schedule[0].workEnd }}
                     </span>
                     <span v-else class="text-red-500">No schedule set</span>
@@ -179,8 +179,8 @@
                 <td class="p-2">{{ dept.id }}</td>
                 <td class="p-2">{{ dept.name }}</td>
                 <td class="p-2">
-                  <span :class="dept.department_schedule[0] ? 'text-green-500' : 'text-red-500'">
-                    {{ dept.department_schedule[0] ? 'Yes' : 'No' }}
+                  <span :class="dept.department_schedule && dept.department_schedule[0] ? 'text-green-500' : 'text-red-500'">
+                    {{ dept.department_schedule && dept.department_schedule[0] ? 'Yes' : 'No' }}
                   </span>
                 </td>
               </tr>
@@ -204,15 +204,17 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="dept in departments" :key="dept.id" v-if="dept.department_schedule[0]" class="border-b dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700">
-                <td class="p-2 font-medium">{{ dept.name }}</td>
-                <td class="p-2">{{ dept.department_schedule[0].workStart }} - {{ dept.department_schedule[0].workEnd }}</td>
-                <td class="p-2">{{ dept.department_schedule[0].lunchStart }} - {{ dept.department_schedule[0].lunchEnd }}</td>
-                <td class="p-2">{{ dept.department_schedule[0].breakStart }} - {{ dept.department_schedule[0].breakEnd }}</td>
-                <td class="p-2">{{ dept.department_schedule[0].workingDays }}</td>
-                <td class="p-2">{{ dept.department_schedule[0].workdaysNote }}</td>
-              </tr>
-              <tr v-if="departments.every(d => !d.department_schedule[0])">
+              <template v-for="dept in departments" :key="dept.id">
+                <tr v-if="dept.department_schedule && dept.department_schedule[0]" class="border-b dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700">
+                  <td class="p-2 font-medium">{{ dept.name }}</td>
+                  <td class="p-2">{{ dept.department_schedule[0].workStart }} - {{ dept.department_schedule[0].workEnd }}</td>
+                  <td class="p-2">{{ dept.department_schedule[0].lunchStart }} - {{ dept.department_schedule[0].lunchEnd }}</td>
+                  <td class="p-2">{{ dept.department_schedule[0].breakStart }} - {{ dept.department_schedule[0].breakEnd }}</td>
+                  <td class="p-2">{{ dept.department_schedule[0].workingDays }}</td>
+                  <td class="p-2">{{ dept.department_schedule[0].workdaysNote }}</td>
+                </tr>
+              </template>
+              <tr v-if="departments.every(d => !(d.department_schedule && d.department_schedule[0]))">
                 <td colspan="6" class="p-4 text-center text-neutral-500">No schedules created yet.</td>
               </tr>
             </tbody>
