@@ -166,24 +166,38 @@
       <div class="bg-white dark:bg-neutral-800 p-6 rounded-lg shadow-md">
         <h2 class="text-2xl font-semibold mb-4">Existing Departments</h2>
         <div class="overflow-x-auto">
-          <table class="w-full min-w-[400px] text-left">
+          <table class="w-full min-w-[600px] text-left">
             <thead>
               <tr class="border-b dark:border-neutral-600">
                 <th class="p-2">ID</th>
                 <th class="p-2">Name</th>
+                <th class="p-2">Schedule ID</th>
+                <th class="p-2">Work Start</th>
+                <th class="p-2">Work End</th>
                 <th class="p-2">Has Schedule?</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="dept in departments" :key="dept.id" class="border-b dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700">
-                <td class="p-2">{{ dept.id }}</td>
-                <td class="p-2">{{ dept.name }}</td>
-                <td class="p-2">
-                  <span :class="dept.department_schedule && dept.department_schedule[0] ? 'text-green-500' : 'text-red-500'">
-                    {{ dept.department_schedule && dept.department_schedule[0] ? 'Yes' : 'No' }}
-                  </span>
-                </td>
-              </tr>
+              <template v-for="dept in departments" :key="dept.id">
+                <tr class="border-b dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700">
+                  <td class="p-2">{{ dept.id }}</td>
+                  <td class="p-2">{{ dept.name }}</td>
+                  <td class="p-2">
+                    {{ dept.department_schedule && dept.department_schedule.length > 0 ? dept.department_schedule[0].id : '-' }}
+                  </td>
+                  <td class="p-2">
+                    {{ dept.department_schedule && dept.department_schedule.length > 0 ? dept.department_schedule[0].workStart : '-' }}
+                  </td>
+                  <td class="p-2">
+                    {{ dept.department_schedule && dept.department_schedule.length > 0 ? dept.department_schedule[0].workEnd : '-' }}
+                  </td>
+                  <td class="p-2">
+                    <span :class="dept.department_schedule && dept.department_schedule.length > 0 ? 'text-green-500' : 'text-red-500'">
+                      {{ dept.department_schedule && dept.department_schedule.length > 0 ? 'Yes' : 'No' }}
+                    </span>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
         </div>
@@ -334,33 +348,50 @@ function openScheduleEditor(department) {
 }
 
 async function handleSaveSchedule() {
-  const isUpdating = !!scheduleToEdit.value.id
-  const payload = { ...scheduleToEdit.value }
-  delete payload.department_name
+  const isUpdating = !!scheduleToEdit.value.id;
+  // Prepare payload, removing the 'department_name' helper prop
+  const payload = { ...scheduleToEdit.value };
+  delete payload.department_name;
+  // Make null any empty time fields, as the DB allows nulls
   for (const key of ['lunchStart', 'lunchEnd', 'breakStart', 'breakEnd']) {
     if (payload[key] === '') {
-      payload[key] = null
+      payload[key] = null;
     }
   }
   try {
-    let result
+    let result;
     if (isUpdating) {
-      const { id, ...patch } = payload
-      result = await updateDepartmentSchedule(id, patch)
-      alert('Schedule updated successfully!')
+      // Update existing
+      const { id, ...patch } = payload;
+      result = await updateDepartmentSchedule(id, patch);
+      alert('Schedule updated successfully!');
     } else {
-      delete payload.id
-      result = await createDepartmentSchedule(payload)
-      alert('Schedule created successfully!')
+      // Always check the database for an existing schedule before creating
+      const { supabase } = await import('../utils/supabase');
+      const { data: existing, error: existingError } = await supabase
+        .from('department_schedule')
+        .select('id')
+        .eq('department_id', payload.department_id)
+        .single();
+      if (existing) {
+        alert('Error: This department already has a schedule. Please update the existing schedule instead.');
+        return;
+      }
+      // Create new
+      delete payload.id; // Ensure id is not in the insert payload
+      result = await createDepartmentSchedule(payload);
+      alert('Schedule created successfully!');
     }
     if (result) {
-      loadDepartmentsWithSchedules()
-      scheduleToEdit.value = { ...defaultSchedule }
+      // Refresh the list to show new data
+      loadDepartmentsWithSchedules();
+      // Reset form
+      scheduleToEdit.value = { ...defaultSchedule };
     } else {
-      throw new Error('Save operation failed.')
+      throw new Error('Save operation failed.');
     }
   } catch (err) {
-    alert(`Error saving schedule: ${err.message}`)
+    alert(`Error saving schedule: ${err.message}`);
   }
 }
 </script>
